@@ -5,7 +5,7 @@
 crifanLib.py
 
 [Version]
-v2012-03-27
+v2012-03-31
 
 [Function]
 crifan's common functions, implemented by Python.
@@ -19,7 +19,7 @@ crifan's common functions, implemented by Python.
 """
 
 __author__ = "Crifan Li (admin@crifan.com)"
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 __copyright__ = "Copyright (c) 2012, Crifan Li"
 __license__ = "GPL"
 
@@ -40,13 +40,39 @@ __VERSION__ = "v2012-03-27";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
+    
+    # also belong to ContentTypes, more info can refer: http://kenya.bokee.com/3200033.html
+    # here use Tuple to avoid unexpected change
+    # note: for tuple, refer item use tuple[i], not tuple(i)
+    'picSufList'   : ('bmp', 'gif', 'jpeg', 'jpg', 'jpe', 'png', 'tiff', 'tif'),
 }
 
 #----------------------------------global values--------------------------------
 gVal = {
     'calTimeKeyDict'        : {},
+    'picSufChars'  : '', # store the pic suffix char list
 }
 
+#### some internal functions ###
+#------------------------------------------------------------------------------
+# generate the suffix char list according to constont picSufList
+def genSufList() :
+    global gConst;
+    
+    sufChrList = [];
+    for suffix in gConst['picSufList'] :
+        for c in suffix :
+            sufChrList.append(c);
+    sufChrList = uniqueList(sufChrList);
+    sufChrList.sort();
+    joinedSuf = ''.join(sufChrList);
+
+    swapedSuf = [];
+    swapedSuf = joinedSuf.swapcase();
+
+    wholeSuf = joinedSuf + swapedSuf;
+
+    return wholeSuf;
 
 ################################################################################
 # Time
@@ -76,6 +102,16 @@ def convertLocalToGmt(localTime) :
 ################################################################################
 # String
 ################################################################################
+
+#------------------------------------------------------------------------------
+# get supported picture suffix list
+def getPicSufList():
+    return gConst['picSufList'];
+
+#------------------------------------------------------------------------------
+# get supported picture suffix chars
+def getPicSufChars():
+    return gVal['picSufChars'];
 
 #------------------------------------------------------------------------------
 # got python script self file name
@@ -356,7 +392,6 @@ def replaceStrEntToNumEnt(text) :
         replacedText = re.compile(key).sub(strToNumEntDict[key], replacedText);
     return replacedText;
 
-
 #------------------------------------------------------------------------------
 # convert the xxx=yyy into tuple('xxx', yyy), then return the tuple value
 # [makesure input string]
@@ -460,17 +495,29 @@ def filterList(listToFilter, listToCompare) :
 # eg :
 # http://publish.it168.com/2007/0627/images/500754.jpg ->
 # http://img.publish.it168.com/2007/0627/images/500754.jpg
+# other special one:
+# sina pic url: 
+# http://s14.sinaimg.cn/middle/3d55a9b7g9522d474a84d&690
+# http://s14.sinaimg.cn/orignal/3d55a9b7g9522d474a84d
+# the real url is same with above url
 def isFileValid(fileUrl) :
     fileIsValid = False;
-    errReason = '';
+    errReason = "Unknown error";
 
     try :
         origFileName = fileUrl.split('/')[-1];
-        retFileUrl = urllib2.urlopen(fileUrl); # note: Python 2.6 has added timeout support.
-        realUrl = retFileUrl.geturl();
+        #print "origFileName=",origFileName;
+        resp = urllib2.urlopen(fileUrl); # note: Python 2.6 has added timeout support.
+        #print "resp=",resp;
+        realUrl = resp.geturl();
+        #print "realUrl=",realUrl;
         newFileName = realUrl.split('/')[-1];
-        urlInfo = retFileUrl.info();
+        #print "newFileName=",newFileName;
+        urlInfo = resp.info();
+        #print "urlInfo=",urlInfo;
+              
         contentLen = urlInfo['Content-Length'];
+        
         # eg: Content-Type= image/gif, ContentTypes : audio/mpeg
         # more ContentTypes can refer: http://kenya.bokee.com/3200033.html
         contentType = urlInfo['Content-Type'];
@@ -675,4 +722,6 @@ def transZhcnToEn(strToTrans) :
 
 #------------------------------------------------------------------------------
 if __name__=="crifanLib":
+    gVal['picSufChars'] = genSufList();
+    #print "gVal['picSufChars']=",gVal['picSufChars'];
     print "Imported: %s, %s"%( __name__, __VERSION__);

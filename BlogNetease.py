@@ -25,7 +25,7 @@ import cookielib;
 from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.0";
+__VERSION__ = "v1.2";
 
 gConst = {
     'blogApi163'        : "http://api.blog.163.com",
@@ -42,12 +42,17 @@ gVal = {
 # Internal 163 blog Functions 
 ################################################################################
 
-#------------------------------------------------------------------------------
-# add CDATA, also validate it for xml
-def packageCDATA(info):
-    #info = saxutils.escape('<![CDATA[' + info + ']]>')
-    info = '<![CDATA[' + info + ']]>'
-    return info
+def htmlToSoup(html):
+    soup = None;
+    # Note:
+    # (1) baidu and 163 blog all use charset=gbk, but some special blog item:
+    # http://chaganhu99.blog.163.com/blog/static/565262662007112245628605/
+    # will messy code if use default gbk to decode it, so set GB18030 here to avoid messy code
+    # (2) after BeautifulSoup process, output html content already is utf-8 encoded
+    soup = BeautifulSoup(html, fromEncoding="GB18030");
+    #prettifiedSoup = soup.prettify();
+    #logging.debug("Got post html\n---------------\n%s", prettifiedSoup);
+    return soup;
 
 
 #------------------------------------------------------------------------------
@@ -485,7 +490,7 @@ def fillComments(destCmtDict, srcCmtDict):
 
     decodedNickname = srcCmtDict['publisherNickname'].decode('unicode-escape');
     noCtrlChrNickname = crifanLib.removeCtlChr(decodedNickname);
-    destCmtDict['author'] = packageCDATA(noCtrlChrNickname);
+    destCmtDict['author'] = noCtrlChrNickname;
     destCmtDict['author_email'] = srcCmtDict['publisherEmail'];
     destCmtDict['author_url'] = saxutils.escape(genNeteaseUserUrl(srcCmtDict['publisherName']));
     destCmtDict['author_IP'] = srcCmtDict['ip'];
@@ -508,7 +513,7 @@ def fillComments(destCmtDict, srcCmtDict):
     #logging.debug("after decode, coment content:\n%s", cmtContent);
     # remove invalid control char in comments content
     cmtContent = crifanLib.removeCtlChr(cmtContent);
-    destCmtDict['content'] = packageCDATA(cmtContent);
+    destCmtDict['content'] = cmtContent;
 
     destCmtDict['approved'] = 1;
     destCmtDict['type'] = '';
@@ -671,24 +676,30 @@ def isSelfBlogPic(picInfoDict):
 # get the found pic info after re.search
 # foundPic is MatchObject
 def getFoundPicInfo(foundPic):
-    # here should corresponding to singlePicUrlNoSufPat in processPicCfgDict
+    # here should corresponding to singlePicUrlPat in processPicCfgDict
     picUrl  = foundPic.group(0);
     fd1     = foundPic.group(1); # for 163 pic, is ph/bimg
     fd2     = foundPic.group(2); # for 163 pic, is 126
     fd3     = foundPic.group(3); # for 163 pic, is net
     filename= foundPic.group("filename");
-                            
+    suffix  = foundPic.group("suffix");
+    
     picInfoDict = {
-        'picUrl'    : picUrl,
-        'filename'  : filename,
-        'fields'    : 
+        'isSupportedPic': False,
+        'picUrl'        : picUrl,
+        'filename'      : filename,
+        'suffix'        : suffix,
+        'fields'        : 
             {
                 'fd1' : fd1,
                 'fd2' : fd2,
                 'fd3' : fd3,
             },
     };
-    
+        
+    if (suffix in crifanLib.getPicSufList()) :
+        picInfoDict['isSupportedPic'] = True;
+
     return picInfoDict;
 
 
@@ -697,10 +708,11 @@ def getFoundPicInfo(foundPic):
 ################################################################################
 
 #------------------------------------------------------------------------------
-# extract title fom soup
-def extractTitle(soup):
+# extract title fom html
+def extractTitle(html):
     titXmlSafe = '';
     try :
+        soup = htmlToSoup(html);
         foundTitle = soup.find(attrs={"class":"tcnt"});
         
         # foundTitle should not empty
@@ -716,10 +728,11 @@ def extractTitle(soup):
 
 
 #------------------------------------------------------------------------------
-# extract datetime fom soup
-def extractDatetime(soup) :
+# extract datetime fom html
+def extractDatetime(html) :
     datetimeStr = '';
     try :
+        soup = htmlToSoup(html);
         foundDatetime = soup.find(attrs={"class":"blogsep"});
         datetimeStr = foundDatetime.string.strip(); #2010-11-15 09:44:12
     except :
@@ -729,10 +742,11 @@ def extractDatetime(soup) :
 
 
 #------------------------------------------------------------------------------
-# extract blog item content fom soup
-def extractContent(soup) :
+# extract blog item content fom html
+def extractContent(html) :
     contentStr = '';
     try :
+        soup = htmlToSoup(html);
         foundContent = soup.find(attrs={"class":"bct fc05 fc11 nbw-blog ztag"});
 
         # note: 
@@ -749,10 +763,11 @@ def extractContent(soup) :
     return contentStr;
 
 #------------------------------------------------------------------------------
-# extract category from soup
-def extractCategory(soup) :
+# extract category from html
+def extractCategory(html) :
     catXmlSafe = '';
     try :
+        soup = htmlToSoup(html);
         foundCat = soup.find(attrs={"class":"fc03 m2a"});
         catStr = foundCat.string.strip();
         catNoUniNum = crifanLib.repUniNumEntToChar(catStr);
@@ -763,10 +778,12 @@ def extractCategory(soup) :
     return catXmlSafe;
 
 #------------------------------------------------------------------------------
-# extract tags info from soup
-def extractTags(soup) :
+# extract tags info from html
+def extractTags(html) :
     tagList = [];
     try :
+        soup = htmlToSoup(html);
+        
         # extract tags from following string:
         # blogTag:'wordpress,importer,无法识别作者,author',
 
@@ -791,11 +808,12 @@ def extractTags(soup) :
 #------------------------------------------------------------------------------
 # fetch and parse comments 
 # return the parsed dict value
-def fetchAndParseComments(url, soup):
+def fetchAndParseComments(url, html):
     cmtRespDictList = [];
     parsedCommentsList = [];
 
     #extract comments if exist
+    soup = htmlToSoup(html);
     cmtRespDictList = fetchComments(url, soup);
     if(cmtRespDictList) :
         # got valid comments, now proess it
@@ -808,10 +826,11 @@ def fetchAndParseComments(url, soup):
     return parsedCommentsList;
 
 #------------------------------------------------------------------------------
-# find next permanent link from soup
-def findNextPermaLink(soup) :
+# find next permanent link from html
+def findNextPermaLink(html) :
     nextLinkStr = '';
     try :
+        soup = htmlToSoup(html);
         foundNextLink = soup.find(attrs={"class":"pright thide"});
         nextLinkStr = foundNextLink.a['href'];
         logging.debug("Found next permanent link %s", nextLinkStr);
@@ -855,15 +874,16 @@ def getProcessPhotoCfg():
     # http://photo.bababian.com/20061125/C90C3EDF9AC2E2E79D50F865FB4EB3B8_500.jpg
     # http://img.blog.163.com/photo/NT166ikVSUCOVvSLJfOrNQ==/3734609990997279604.jpg
     # http://a1.phobos.apple.com/r10/Music/y2005/m02/d24/h13/s05.lvnxldzq.170x170-75.jpg
-
+    
+    picSufChars = crifanLib.getPicSufChars();
     processPicCfgDict = {
         # here only extract last pic name contain: char,digit,-,_
-        'allPicUrlNoSufPat'     : r'http://\w{1,20}\.\w{1,20}\.\w{1,10}[\.]?\w*/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}',
+        'allPicUrlPat'      : r'http://\w{1,20}\.\w{1,20}\.\w{1,10}[\.]?\w*/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}'  + r'\.[' + picSufChars + r']{3,4}',
         #                              1=field1    2=field2    3=field3                                4=filename                     5=suffix
-        'singlePicUrlNoSufPat'  : r'http://\w{1,20}\.(\w{1,20})\.(\w{1,10})[\.]?(\w*)/[\w%\-=]{0,50}[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})',
-        'getFoundPicInfo'       : getFoundPicInfo,
-        'isSelfBlogPic'         : isSelfBlogPic,
-        'genNewOtherPicName'    : genNewOtherPicName,
+        'singlePicUrlPat'   : r'http://\w{1,20}\.(\w{1,20})\.(\w{1,10})[\.]?(\w*)/[\w%\-=]{0,50}[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
+        'getFoundPicInfo'   : getFoundPicInfo,
+        'isSelfBlogPic'     : isSelfBlogPic,
+        'genNewOtherPicName': genNewOtherPicName,
     };
     
     return processPicCfgDict;
@@ -874,7 +894,7 @@ def extractBlogTitAndDesc(blogEntryUrl) :
     (blogTitle, blogDescription) = ("", "");
     
     respHtml = crifanLib.getUrlRespHtml(blogEntryUrl);
-    soup = BeautifulSoup(respHtml);
+    soup = htmlToSoup(respHtml);
     
     try:
         titleAndDesc = soup.findAll(attrs={"class":"ztag pre"});
@@ -1193,7 +1213,7 @@ def loginBlog(username, password) :
 #------------------------------------------------------------------------------
 # check whether this post is private(self only) or not
 # if error while check, consider it to non-private
-def isPrivatePost(soup) :
+def isPrivatePost(html) :
     isPrivate = False;
     
     # private posts:
@@ -1203,6 +1223,7 @@ def isPrivatePost(soup) :
     # public posts:
     #<h3 class="title pre fs1"><span class="tcnt">公开 帖子 测试</span>&nbsp;&nbsp;<span class="bgc0 fc07 fw0 fs0"></span></h3>
     try :
+        soup = htmlToSoup(html);
         foundBgc0 = soup.find(attrs={"class":"bgc0 fc07 fw0 fs0"});
         if foundBgc0 and foundBgc0.contents :
             for i, content in enumerate(foundBgc0.contents) :
