@@ -6,6 +6,12 @@ For BlogsToWordpress, this file contains the functions for Sina Blog.
 
 [TODO]
 
+【版本历史】
+[v1.4]
+1.支持处理评论数目超多的帖子，比如：
+http://blog.sina.com.cn/s/blog_4701280b0101854o.html -> 2万多个评论
+http://blog.sina.com.cn/s/blog_4701280b0102e0p3.html -> 3万多个评论
+
 """
 
 import os;
@@ -23,7 +29,7 @@ import cookielib;
 from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.3";
+__VERSION__ = "v1.4";
 
 gConst = {
     'spaceDomain'  : 'http://blog.sina.com.cn',
@@ -107,7 +113,7 @@ def htmlToSoup(html):
 # http://blog.sina.com.cn/u/2671017827
 def extractBlogUser(inputUrl):
     (extractOk, extractedBlogUser, generatedBlogEntryUrl) = (False, "", "");
-    
+
     logging.debug("Extracting blog user from url=%s", inputUrl);
     
     try :
@@ -418,56 +424,103 @@ def parseCmtDataStr(dataStr, startNum):
         
         cmtNum = cmtIdx + 1;
         cmtId = cmtNum + startNum;
-        destCmtDict['id'] = cmtId;
         
-        logging.debug("--- comment[%d] ---", destCmtDict['id']);
-        
-        SG_revert = singleCmt.p;
-        contents = SG_revert.contents;
-        
-        SG_revert_Tit = SG_revert.find(attrs={"class":"SG_revert_Tit"});
+        # init to null, log it while error
+        SG_revert = None;
+        SG_revert_Tit = None;
         cmtTitleUrl = "";
-        if SG_revert_Tit.a :
-            SG_revert_Tit_a = SG_revert_Tit.a;
-            cmtTitle = SG_revert_Tit_a.string;
-            cmtTitleUrl = SG_revert_Tit_a['href'];
-        else :
-            cmtTitle = SG_revert_Tit.string;
-        decoedCmtTitle = cmtTitle.decode('unicode-escape');
+        cmtTitle = "";
+        decoedCmtTitle = "";
+        SG_revert_Time = None;
+        datetimeStr = "";
+        parsedLocalTime = None;
+        gmtTime = None;
+        SG_txtb = None;
+        mappedContents = None;
+        cmtContent = "";
+        decodedCmtContent = "";
         
-        destCmtDict['author'] = decoedCmtTitle;
-        destCmtDict['author_url'] = cmtTitleUrl;
-        
-        SG_revert_Time = SG_revert.find(attrs={"class":"SG_revert_Time"});
-        datetimeStr = SG_revert_Time.em.string;
-        
-        parsedLocalTime = datetime.strptime(datetimeStr, '%Y-%m-%d %H:%M:%S'); #2012-03-29 09:52:17
-        gmtTime = crifanLib.convertLocalToGmt(parsedLocalTime);
-        destCmtDict['date'] = parsedLocalTime.strftime("%Y-%m-%d %H:%M:%S");
-        destCmtDict['date_gmt'] = gmtTime.strftime("%Y-%m-%d %H:%M:%S");
-        
-        SG_txtb = singleCmt.div;
-        
-        mappedContents = map(CData, SG_txtb.contents);
-        cmtContent = ''.join(mappedContents);
-        
-        decodedCmtContent = cmtContent.decode('unicode-escape');
-        destCmtDict['content'] = decodedCmtContent;
+        try:
+            destCmtDict['id'] = cmtId;
+            
+            logging.debug("--- comment[%d] ---", destCmtDict['id']);
+            
+            SG_revert = singleCmt.p;
+            
+            SG_revert_Tit = SG_revert.find(attrs={"class":"SG_revert_Tit"});
+            #cmtTitleUrl = "";
+            if SG_revert_Tit.a :
+                SG_revert_Tit_a = SG_revert_Tit.a;
+                cmtTitle = SG_revert_Tit_a.string;
+                #print "a.string OK, cmtTitle=",cmtTitle;
+                
+                cmtTitleUrl = SG_revert_Tit_a['href'];
+            else :
+                cmtTitle = SG_revert_Tit.string;
 
-        destCmtDict['author_email'] = "";
-        destCmtDict['author_IP'] = "";
-        #destCmtDict['approved'] = 1;
-        #destCmtDict['type'] = '';
-        destCmtDict['parent'] = 0;
-        #destCmtDict['user_id'] = 0;
-        
-        logging.debug("author=%s", destCmtDict['author']);
-        logging.debug("author_url=%s", destCmtDict['author_url']);
-        logging.debug("date=%s", destCmtDict['date']);
-        logging.debug("date_gmt=%s", destCmtDict['date_gmt']);
-        logging.debug("content=%s", destCmtDict['content']);
-        
-        cmtDictList.append(destCmtDict);
+            # for special:
+            # the 980th in comment http://blog.sina.com.cn/s/blog_4701280b0101854o.html not contain title 
+            # => SG_revert_Tit_a.string is empty
+            # => follow cmtTitle.decode('unicode-escape') will fail
+            # => set a fake title if is empty
+            if(not cmtTitle) :
+                cmtTitle = "Nobody";
+
+            decoedCmtTitle = cmtTitle.decode('unicode-escape');
+            destCmtDict['author'] = decoedCmtTitle;
+            
+            destCmtDict['author_url'] = cmtTitleUrl;
+            
+            SG_revert_Time = SG_revert.find(attrs={"class":"SG_revert_Time"});
+            datetimeStr = SG_revert_Time.em.string;
+            
+            parsedLocalTime = datetime.strptime(datetimeStr, '%Y-%m-%d %H:%M:%S'); #2012-03-29 09:52:17
+            gmtTime = crifanLib.convertLocalToGmt(parsedLocalTime);
+            destCmtDict['date'] = parsedLocalTime.strftime("%Y-%m-%d %H:%M:%S");
+            destCmtDict['date_gmt'] = gmtTime.strftime("%Y-%m-%d %H:%M:%S");
+            
+            SG_txtb = singleCmt.div;
+            
+            mappedContents = map(CData, SG_txtb.contents);
+            cmtContent = ''.join(mappedContents);
+            
+            decodedCmtContent = cmtContent.decode('unicode-escape');
+            destCmtDict['content'] = decodedCmtContent;
+
+            destCmtDict['author_email'] = "";
+            destCmtDict['author_IP'] = "";
+            #destCmtDict['approved'] = 1;
+            #destCmtDict['type'] = '';
+            destCmtDict['parent'] = 0;
+            #destCmtDict['user_id'] = 0;
+            
+            logging.debug("author=%s", destCmtDict['author']);
+            logging.debug("author_url=%s", destCmtDict['author_url']);
+            logging.debug("date=%s", destCmtDict['date']);
+            logging.debug("date_gmt=%s", destCmtDict['date_gmt']);
+            logging.debug("content=%s", destCmtDict['content']);
+            
+            cmtDictList.append(destCmtDict);
+            #print "single comment parse OK: %d"%(cmtId);
+        except:
+            logging.debug("Error while parse single comment %d", cmtId);
+            logging.debug("-------- detailed single comment info --------");
+            logging.debug("SG_revert=%s", SG_revert);
+            logging.debug("SG_revert_Tit=%s", SG_revert_Tit);
+            logging.debug("cmtTitleUrl=%s", cmtTitleUrl);
+            logging.debug("decoedCmtTitle=%s", decoedCmtTitle);
+            logging.debug("SG_revert_Time=%s", SG_revert_Time);
+            logging.debug("datetimeStr=%s", datetimeStr);
+            logging.debug("parsedLocalTime=%s", parsedLocalTime);
+            logging.debug("gmtTime=%s", gmtTime);
+            logging.debug("SG_txtb=%s", SG_txtb);
+            logging.debug("mappedContents=%s", mappedContents);
+            logging.debug("cmtContent=%s", cmtContent);
+            logging.debug("decodedCmtContent=%s", decodedCmtContent);
+            logging.debug("-------- detailed single comment info --------");
+
+            #print "%d singleCmt error"%(cmtId);
+            break;
 
     return cmtDictList;
 
@@ -488,28 +541,49 @@ def extractPostId(sinaPostUrl):
 def getCmtJson(cmtUrl):
     logging.debug("fetch comment from url %s", cmtUrl);
     (gotOk, cmtDataJsonStr) = (False, "");
-    respJson = crifanLib.getUrlRespHtml(cmtUrl);
-    #logging.debug("Comment url ret json: \n%s", respJson);
-    # extract returned data field
-    foundData = re.search('{"code":"\w+",data:"(?P<dataStr>.+)"}$', respJson);
-    if (foundData) :
-        dataStr = foundData.group("dataStr");
-        # 1. no comments:
-        #{"code":"A00006",data:"\u535a\u4e3b\u5df2\u5173\u95ed\u8bc4\u8bba"}
-        if(dataStr == "\\u535a\\u4e3b\\u5df2\\u5173\\u95ed\\u8bc4\\u8bba") :
-            # 博主已关闭评论
-            (gotOk, cmtDataJsonStr) = (False, "");
-            decodedDataStr = dataStr.decode("unicode-escape");
-            logging.debug("comment url %s return %s", cmtUrl, decodedDataStr);
-        elif (dataStr.find('class=\\"noCommdate\\"') > 0) :
-            # 2. no more comment
-            #{"code":"A00006",data:"<li><div class=\"noCommdate\">........
-            (gotOk, cmtDataJsonStr) = (False, "");
-            logging.debug("comment url %s return no more comments", cmtUrl);
-        else :
-            # contain valid comment
-            gotOk = True;
-            cmtDataJsonStr = dataStr;
+    respJson = "";
+
+    # sometime due to network error, fetch comment json string will fail, so here do several try
+    maxRetryNum = 3;
+    for tries in range(maxRetryNum) :
+        try :
+            #respJson = crifanLib.getUrlRespHtml(cmtUrl);
+            respJson = crifanLib.getUrlRespHtml(cmtUrl, timeout=20); # add timeout to avoid dead(no response for ever) !
+            logging.debug("Successfully got comment json string from %s", cmtUrl);
+            break # successfully, so break now
+        except :
+            if tries < (maxRetryNum - 1) :
+                logging.warning("    Fail to fetch comment json string from %s, do %d retry", cmtUrl, (tries + 1));
+                continue;
+            else : # last try also failed, so exit
+                logging.warning("    All %d times failed for try to fetch comment json from %s !", maxRetryNum, cmtUrl);
+                break;
+
+    if(respJson) :
+        #logging.debug("Comment url ret json: \n%s", respJson);
+        # extract returned data field
+        foundData = re.search('{"code":"A00006",data:"(?P<dataStr>.+)"}$', respJson);
+        if (foundData) :
+            dataStr = foundData.group("dataStr");
+            # 1. no comments:
+            #{"code":"A00006",data:"\u535a\u4e3b\u5df2\u5173\u95ed\u8bc4\u8bba"}
+            if(dataStr == "\\u535a\\u4e3b\\u5df2\\u5173\\u95ed\\u8bc4\\u8bba") :
+                # 博主已关闭评论
+                (gotOk, cmtDataJsonStr) = (False, "");
+                decodedDataStr = dataStr.decode("unicode-escape");
+                logging.debug("comment url %s return %s", cmtUrl, decodedDataStr);
+            elif (dataStr.find('class=\\"noCommdate\\"') > 0) :
+                # 2. no more comment
+                #{"code":"A00006",data:"<li><div class=\"noCommdate\">........
+                (gotOk, cmtDataJsonStr) = (False, "");
+                logging.debug("comment url %s return no more comments", cmtUrl);
+            else :
+                # contain valid comment
+                gotOk = True;
+                cmtDataJsonStr = dataStr;
+                logging.debug("Got valid comment code json string");
+        else:
+            logging.debug("Found returned invalid comment code json string=%s", respJson);
 
     return (gotOk, cmtDataJsonStr);
 
@@ -518,6 +592,10 @@ def getCmtJson(cmtUrl):
 # return the parsed dict value
 def fetchAndParseComments(url, html):
     parsedCommentsList = [];
+   
+    # for output info use
+    maxNumReportOnce = 200;
+    lastRepTime = 0;
     
     try :
         postId = extractPostId(url);
@@ -537,10 +615,20 @@ def fetchAndParseComments(url, html):
                 cmdDictList = parseCmtDataStr(cmtDataJsonStr, cmtIdStartNum);
                 for eachCmtDict in cmdDictList :
                     parsedCommentsList.append(eachCmtDict);
+                    
+                    # report processed comments if exceed certain number
+                    parsedCmtLen = len(parsedCommentsList);
+                    curRepTime = parsedCmtLen/maxNumReportOnce;
+                    if(curRepTime != lastRepTime) :
+                        # report
+                        logging.info("    Has processed comments: %5d", parsedCmtLen);
+                        # update
+                        lastRepTime = curRepTime;
 
                 cmtPageNum += 1;
             else :
                 needGetMore = False;
+
     except :
         logging.debug("Error while fetch and parse comment for %s", url);
 

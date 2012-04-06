@@ -633,7 +633,7 @@ def manuallyDownloadFile(fileUrl, fileToSave) :
 # get response from url
 # note: if you have already used cookiejar, then here will automatically use it
 # while using rllib2.Request
-def getUrlResponse(url, postDict={}, headerDict={}) :
+def getUrlResponse(url, postDict={}, headerDict={}, timeout=0) :
     # makesure url is string, not unicode, otherwise urllib2.urlopen will error
     url = str(url);
 
@@ -654,14 +654,18 @@ def getUrlResponse(url, postDict={}, headerDict={}) :
     req.add_header('Accept', '*/*');
     #req.add_header('Accept-Encoding', 'gzip, deflate');
     req.add_header('Connection', 'Keep-Alive');
-    resp = urllib2.urlopen(req);
+    if(timeout > 0) :
+        # set timeout value if necessary
+        resp = urllib2.urlopen(req, timeout=timeout);
+    else :
+        resp = urllib2.urlopen(req);
     
     return resp;
 
 #------------------------------------------------------------------------------
 # get response html==body from url
-def getUrlRespHtml(url, postDict={}, headerDict={}) :
-    resp = getUrlResponse(url, postDict, headerDict);
+def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0) :
+    resp = getUrlResponse(url, postDict, headerDict, timeout);
     respHtml = resp.read();
     return respHtml;
 

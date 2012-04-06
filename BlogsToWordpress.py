@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v5.5
+版本：     v5.6
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -20,6 +20,10 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 2.支持自定义导出特定类型的帖子为public和private。
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
+
+【版本历史】
+[v5.6]
+1.（当评论数据超多的时候，比如sina韩寒博客帖子评论，很多都是2,3万个的）添加日志信息，显示当前已处理多少个评论。
 
 -------------------------------------------------------------------------------
 """
@@ -47,7 +51,7 @@ import BlogQQ;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v5.5";
+__VERSION__ = "v5.6";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
@@ -217,7 +221,7 @@ def processPhotos(blogContent):
             allUrlPattern = processPicCfgDict['allPicUrlPat'];
             #print "allUrlPattern=",allUrlPattern;
             
-            logging.debug("before find pic, blogConten=%s", blogContent);
+            #logging.debug("before find pic, blogConten=%s", blogContent);
             
             # if matched, result for findall() is a list when no () in pattern
             matchedList = re.findall(allUrlPattern, blogContent);
@@ -798,7 +802,12 @@ def exportPost(entry, user):
     #compose comment string
     commentsStr = "";
     logging.debug("Now will export comments = %d", len(entry['comments']));
-    for comment in entry['comments']:
+    
+    # for output info use
+    maxNumReportOnce = 500;
+    lastRepTime = 0;
+    
+    for curCmtNum, comment in enumerate(entry['comments']):
         commentsStr += commentT.substitute(
                             commentId = comment['id'],
                             commentAuthor = packageCDATA(comment['author']),
@@ -809,6 +818,13 @@ def exportPost(entry, user):
                             commentDateGMT = comment['date_gmt'],
                             commentContent = packageCDATA(comment['content']),
                             commentParent = comment['parent'],);
+        # report for each maxNumReportOnce
+        curRepTime = curCmtNum/maxNumReportOnce;
+        if(curRepTime != lastRepTime) :
+            # report
+            logging.info("  Has generated comments string: %5d", curCmtNum);
+            # update
+            lastRepTime = curRepTime;             
 
     # parse datetime string into local time
     parsedLocalTime = parseDatetimeStrToLocalTime(entry['datetime']);
