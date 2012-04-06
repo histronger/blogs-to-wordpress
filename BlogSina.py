@@ -23,7 +23,7 @@ import cookielib;
 from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.0";
+__VERSION__ = "v1.3";
 
 gConst = {
     'spaceDomain'  : 'http://blog.sina.com.cn',
@@ -111,15 +111,6 @@ def extractBlogUser(inputUrl):
     logging.debug("Extracting blog user from url=%s", inputUrl);
     
     try :
-        # is :
-        # http://blog.sina.com.cn/crifan2008
-        # or
-        # http://blog.sina.com.cn/crifan2008/
-        splitedUrl = inputUrl.split("/");
-        #print "splitedUrl=",splitedUrl;
-        
-        splitLen = len(splitedUrl);
-        
         # type1, main url: 
         #http://blog.sina.com.cn/crifan2008
         #http://blog.sina.com.cn/crifan2008/
@@ -225,8 +216,8 @@ def find1stPermalink():
     return (isFound, errInfo);
 
 #------------------------------------------------------------------------------
-# extract title fom html
-def extractTitle(html):
+# extract title fom url, html
+def extractTitle(url, html):
     titXmlSafe = "";
     try :
         soup = htmlToSoup(html);
@@ -246,8 +237,8 @@ def extractTitle(html):
     return titXmlSafe;
 
 #------------------------------------------------------------------------------
-# find next permanent link from html
-def findNextPermaLink(html) :
+# find next permanent link from url, html
+def findNextPermaLink(url, html) :
     nextLinkStr = '';
         
     try :
@@ -268,8 +259,8 @@ def findNextPermaLink(html) :
     return nextLinkStr;
 
 #------------------------------------------------------------------------------
-# extract datetime fom html
-def extractDatetime(html) :
+# extract datetime fom url, html
+def extractDatetime(url, html) :
     datetimeStr = '';
     try :
         #<span class="time SG_txtc">(2008-10-12 22:14:05)</span>
@@ -282,8 +273,8 @@ def extractDatetime(html) :
     return datetimeStr;
 
 #------------------------------------------------------------------------------
-# extract blog item content fom html
-def extractContent(html) :
+# extract blog item content fom url, html
+def extractContent(url, html) :
     contentStr = '';
     try :
         #logging.debug("---before extractContent html :\n%s", html);
@@ -322,8 +313,8 @@ def extractContent(html) :
     return contentStr;
 
 #------------------------------------------------------------------------------
-# extract category from html
-def extractCategory(html) :
+# extract category from url, html
+def extractCategory(url, html) :
     catXmlSafe = '';
     try :
         soup = htmlToSoup(html);
@@ -347,8 +338,8 @@ def extractCategory(html) :
     return catXmlSafe;
 
 #------------------------------------------------------------------------------
-# extract tags info from html
-def extractTags(html) :
+# extract tags info from url, html
+def extractTags(url, html) :
     tagList = [];
     try :
         soup = htmlToSoup(html);
@@ -369,9 +360,6 @@ def extractTags(html) :
         
         for h3 in h3List :
             tagList.append(h3.string);
-        
-        # note: here for list, [u''] is not empty, only [] is empty
-        tagList = crifanLib.removeEmptyInList(tagList);
     except :
         tagList = [];
 
@@ -726,7 +714,7 @@ def parseDatetimeStrToLocalTime(datetimeStr):
 ####### Login Mode ######
 
 #------------------------------------------------------------------------------
-# log in baidu space
+# log in blog
 def loginBlog(username, password) :
 
     loginOk = False;
@@ -735,7 +723,7 @@ def loginBlog(username, password) :
 
 #------------------------------------------------------------------------------
 # check whether this post is private(self only) or not
-def isPrivatePost(soup) :
+def isPrivatePost(url, html) :
     isPrivate = False;
 
     return isPrivate;
@@ -749,4 +737,4 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
 
 #------------------------------------------------------------------------------   
 if __name__=="BlogSina":
-    print "Imported: %s, %s"%( __name__, __VERSION__);
+    print "Imported: %s,\t%s"%( __name__, __VERSION__);

@@ -4,9 +4,6 @@
 [Filename]
 crifanLib.py
 
-[Version]
-v2012-03-31
-
 [Function]
 crifan's common functions, implemented by Python.
 
@@ -19,7 +16,7 @@ crifan's common functions, implemented by Python.
 """
 
 __author__ = "Crifan Li (admin@crifan.com)"
-__version__ = "1.0.2"
+#__version__ = ""
 __copyright__ = "Copyright (c) 2012, Crifan Li"
 __license__ = "GPL"
 
@@ -34,9 +31,10 @@ from datetime import datetime,timedelta;
 from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
 #import htmlentitydefs;
+import struct;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v2012-03-27";
+__VERSION__ = "v1.2";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -73,10 +71,22 @@ def genSufList() :
     wholeSuf = joinedSuf + swapedSuf;
 
     return wholeSuf;
-
+    
 ################################################################################
 # Time
 ################################################################################
+
+#------------------------------------------------------------------------------
+# convert datetime value to timestamp
+# from "2006-06-01 00:00:00" to 1149091200
+def datetimeToTimestamp(datetimeVal) :
+    return int(time.mktime(datetimeVal.timetuple()));
+    
+#------------------------------------------------------------------------------
+# convert timestamp to datetime value
+# from 1149091200 to "2006-06-01 00:00:00"
+def timestampToDatetime(timestamp) :
+    return datetime.fromtimestamp(timestamp);
 
 #------------------------------------------------------------------------------
 #init for calculate elapsed time 
@@ -482,6 +492,24 @@ def filterList(listToFilter, listToCompare) :
             existedList.append(singleOne);
     return (filteredList, existedList);
 
+################################################################################
+# File
+################################################################################
+
+#------------------------------------------------------------------------------
+# save binary data into file
+def saveBinDataToFile(binaryData, fileToSave):
+    saveOK = False;
+    try:
+        savedBinFile = open(fileToSave, "wb"); # open a file, if not exist, create it
+        #print "savedBinFile=",savedBinFile;
+        savedBinFile.write(binaryData);
+        savedBinFile.close();
+        saveOK = True;
+    except :
+        saveOK = False;
+    return saveOK;
+
 
 ################################################################################
 # Network: urllib/urllib2/http
@@ -578,6 +606,30 @@ def downloadFile(fileUrl, fileToSave, needReport = False) :
     return isDownOK;
 
 #------------------------------------------------------------------------------
+# manually download fileUrl then save to fileToSave
+def manuallyDownloadFile(fileUrl, fileToSave) :
+    isDownOK = False;
+    downloadingFile = '';
+
+    try :
+        if fileUrl :
+            # 1. find real address
+            resp = urllib2.urlopen(fileUrl);
+            realUrl = resp.geturl(); # not same with original file url if redirect
+            
+            respHtml = getUrlRespHtml(realUrl);
+            
+            isDownOK = saveBinDataToFile(respHtml, fileToSave);
+        else :
+            print "Input download file url is NULL";
+    except urllib.ContentTooShortError(msg) :
+        isDownOK = False;
+    except :
+        isDownOK = False;
+
+    return isDownOK;
+    
+#------------------------------------------------------------------------------
 # get response from url
 # note: if you have already used cookiejar, then here will automatically use it
 # while using rllib2.Request
@@ -593,6 +645,7 @@ def getUrlResponse(url, postDict={}, headerDict={}) :
         req = urllib2.Request(url);
 
     if(headerDict) :
+        print "added header:",headerDict;
         for key in headerDict.keys() :
             req.add_header(key, headerDict[key]);
 
@@ -649,6 +702,18 @@ def strIsAscii(strToDect) :
         isAscii = True;
     return isAscii;
 
+#------------------------------------------------------------------------------
+# get the possible(possiblility > 0.5) charset of input string
+def getStrPossibleCharset(inputStr) :
+    possibleCharset = "ascii";
+    #possibleCharset = "UTF-8";
+    encInfo = chardet.detect(inputStr);
+    #print "encInfo=",encInfo;
+    if (encInfo['confidence'] > 0.5):
+        possibleCharset = encInfo['encoding'];
+    return possibleCharset;
+    #return encInfo['encoding'];
+    
 #------------------------------------------------------------------------------
 # depend on BeautifulSoup
 # translate strToTranslate from fromLanguage to toLanguage
@@ -724,4 +789,4 @@ def transZhcnToEn(strToTrans) :
 if __name__=="crifanLib":
     gVal['picSufChars'] = genSufList();
     #print "gVal['picSufChars']=",gVal['picSufChars'];
-    print "Imported: %s, %s"%( __name__, __VERSION__);
+    print "Imported: %s,\t%s"%( __name__, __VERSION__);

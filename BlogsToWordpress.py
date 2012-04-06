@@ -2,44 +2,24 @@
 # -*- coding: utf-8 -*-
 """
 -------------------------------------------------------------------------------
-【简介】
-此脚本：
-对所支持的博客提供商：
-1. 百度空间
-2. 网易163
-3. 新浪
-支持如下功能：
-1. 导出为WXR
-将博客中的的帖子的全部信息，导出为WXR(WordPress eXtended RSS)文件，其中：
-（1）此处所说帖子的信息，包含：标题(title)，发布时间(datetime)，内容(content)，分类(category)，标签(tags)，评论(comments)，图片(picture)等。
-（2）关于帖子的内容，还可以根据设置而进行相应处理，包括下载本博客的图片(self blog picture)和别的地址的图片(other picture)，并且替换对应的图片地址为所设置的地址等。
-注：新浪的图片处理功能,暂时只支持处理新浪自己博客的图片，不支持别的地址的图片。
+【版本信息】
+版本：     v5.5
+作者：     crifan
+联系方式： http://www.crifan.com/contact_me/
 
-2. 修改帖子内容
-在给定用户名密码的前提下，对于每个帖子，将原先帖子内容修改为所设置的新的内容。
-注：暂时只支持修改百度空间的帖子。
-
-【使用说明】
-更多相关信息，以及详细的使用说明，请去这里：
-BlogsToWordPress：将百度空间，网易163，新浪等博客搬家到WordPress
+【详细信息】
+BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
-【版本信息】
-版本：     v4.0
-作者：     crifan
-联系方式： admin (at) crifan.com
-
-【其他】
-1.关于WXR：
-WXR(WordPress eXtended Rss)简介
-http://www.crifan.com/2012/03/23/simple_introduction_about_wxr_wordpress_extended_rss/
+【使用说明】
+BlogsToWordPress 的用法的举例说明 
+http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_example/
 
 【TODO】
 1.增加对于friendOnly类型帖子的支持。
 2.支持自定义导出特定类型的帖子为public和private。
-3.有机会，去实现其他博客的支持，比如QQ空间等。
-4.支持设置导出WXR帖子时的顺序：正序和倒序。
-5.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
+3.支持设置导出WXR帖子时的顺序：正序和倒序。
+4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 -------------------------------------------------------------------------------
 """
@@ -59,13 +39,15 @@ from string import Template,replace;
 import xml;
 from xml.sax import saxutils;
 import crifanLib;
+
 import BlogNetease;
 import BlogBaidu;
 import BlogSina;
+import BlogQQ;
+#Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v4.0";
-
+__VERSION__ = "v5.5";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
@@ -75,10 +57,36 @@ gConst = {
     </rss>""",
     'picRootPathInWP'   : "http://localhost/wordpress/wp-content/uploads",
     'othersiteDirName'  : 'other_site',
-    
-    'prodiverBaidu'     : 'Baidu',
-    'prodiverNetease'   : 'Netease',
-    'prodiverSina'      : 'Sina',
+
+    #Change Here If Add New Blog Provider Support
+    # for different blog provider
+    'blogs' : {
+        'Baidu' :   {
+            'blogModule'        : BlogBaidu, # module name, should same with above import BlogXXX
+            'mandatoryIncStr'   : "hi.baidu.com", # url must contain this
+            'descStr'           : "Baidu Space", # Blog description string
+        },
+
+        'Netease' : {
+            'blogModule'        : BlogNetease,
+            'mandatoryIncStr'   : "blog.163.com",
+            'descStr'           : "Netease 163 Blog",
+        },
+
+        'Sina' : {
+            'blogModule'        : BlogSina,
+            'mandatoryIncStr'   : "blog.sina.com.cn",
+            'descStr'           : "Sina Blog",
+        },
+
+        'QQ' :   {
+            'blogModule'        : BlogQQ,
+            #'mandatoryIncStr'   : "qzone.qq.com",
+            # special one http://blog.qq.com/qzone/622007179/1333268691.htm
+            'mandatoryIncStr'   : ".qq.com",
+            'descStr'           : "QQ Space",
+        },
+    } ,
 };
 
 #----------------------------------global values--------------------------------
@@ -131,10 +139,12 @@ gCfg ={
     'postTypeToProcess' : '',
     'processType'       : '',
     
+    #Change Here If Add New Blog Provider Support
     # for modify post, auto jump over the post of 
     # baidu: "文章内容包含不合适内容，请检查", "文章标题包含不合适内容，请检查"
     # 163 : TODO
     # sina : TODO
+    # QQ: TODO
     'autoJumpSensitivePost' : '',
 };
 
@@ -204,13 +214,13 @@ def processPhotos(blogContent):
             processPicCfgDict = getProcessPhotoCfg();
             #print "processPicCfgDict=",processPicCfgDict;
   
-            allUalPattern = processPicCfgDict['allPicUrlPat'];
-            #print "allUalPattern=",allUalPattern;
+            allUrlPattern = processPicCfgDict['allPicUrlPat'];
+            #print "allUrlPattern=",allUrlPattern;
             
-            #logging.debug("before find pic, blogConten=%s", blogContent);
+            logging.debug("before find pic, blogConten=%s", blogContent);
             
             # if matched, result for findall() is a list when no () in pattern
-            matchedList = re.findall(allUalPattern, blogContent);
+            matchedList = re.findall(allUrlPattern, blogContent);
             #print "Len(matchedList)=",len(matchedList);
             #print "matchedList=",matchedList;
             if matchedList :
@@ -260,10 +270,10 @@ def processPhotos(blogContent):
                                 filename= picInfoDict['filename'];
                                 suffix  = picInfoDict['suffix'];
                                 if(not suffix):
-                                # for sina pic url:
-                                # http://s14.sinaimg.cn/middle/3d55a9b7g9522d474a84d&amp;690
-                                # http://s14.sinaimg.cn/middle/3d55a9b7g9522d474a84d&690
-                                # no suf, then set to jpg
+                                    # for sina pic url:
+                                    # http://s14.sinaimg.cn/middle/3d55a9b7g9522d474a84d&amp;690
+                                    # http://s14.sinaimg.cn/middle/3d55a9b7g9522d474a84d&690
+                                    # no suf, then set to jpg
                                     suffix = 'jpg';
                                 suffix = suffix.lower();
                                 
@@ -274,6 +284,7 @@ def processPhotos(blogContent):
                             
                                 # indeed is pic, process it
                                 (picIsValid, errReason) = crifanLib.isFileValid(curUrl);
+                                
                                 #print "picIsValid=",picIsValid;
                                 if picIsValid :
                                     # 1. prepare info
@@ -309,9 +320,19 @@ def processPhotos(blogContent):
 
                                     # download pic and replace url
                                     #print "dstPicFile=",dstPicFile;
-                                    if dstPicFile and crifanLib.downloadFile(curUrl, dstPicFile) :
+                                    
+                                    #if dstPicFile and crifanLib.downloadFile(curUrl, dstPicFile) : 
+                                    # urlretrieve in downloadFile is too slow while download QQ Space Picture
+                                    # so here use manuallyDownloadFile instead
+                                    if dstPicFile and crifanLib.manuallyDownloadFile(curUrl, dstPicFile) :
                                         # replace old url with new url
-                                        blogContent = re.compile(curUrl).sub(newPicUrl, blogContent);
+                                        
+                                        # http://b306.photo.store.qq.com/psb?/8d8d9a4f-2e9f-4b37-82d4-4559d7ec8472/E8WLK8l*kBjpak.5kg.xPzZ.**38oN517LBfrBNEAaQ!/b/YQN5aLZpBwAAYmuLa7YOBwAA
+                                        # will fail for follow line
+                                        #blogContent = re.compile(curUrl).sub(newPicUrl, blogContent);
+                                        # so use this line
+                                        blogContent = blogContent.replace(curUrl, newPicUrl);
+                                        
                                         # record it
                                         gVal['replacedUrlDict'][curUrl] = newPicUrl;
                                         logging.debug("Replace %s with %s", curUrl, newPicUrl);
@@ -479,13 +500,12 @@ def fetchSinglePost(url):
         'respHtml'      : '',
         };
 
-    infoDict['url'] = url;
+    infoDict['url']     = url;
+    infoDict['postid']  = gVal['postID'];
+    infoDict['respHtml']= respHtml;
     
-    infoDict['postid'] = gVal['postID'];
-    infoDict['respHtml'] = respHtml;
-    
-    # title
-    infoDict['title'] =  extractTitle(respHtml);    
+    # extract title
+    infoDict['title'] =  extractTitle(url, respHtml);    
     if(not infoDict['title'] ) :
         logging.error("Can not extract post title for %s !", url);
         sys.exit(2);
@@ -494,10 +514,10 @@ def fetchSinglePost(url):
 
     # extrat next (previously published) blog item link
     # here must extract next link first, for next call to use while omit=True
-    infoDict['nextLink'] = findNextPermaLink(respHtml);
+    infoDict['nextLink'] = findNextPermaLink(url, respHtml);
     logging.debug("Extracted post's next permanent link: %s", infoDict['nextLink']);
 
-    isPrivate = isPrivatePost(respHtml);
+    isPrivate = isPrivatePost(url, respHtml);
     if(isPrivate) :
         infoDict['type'] = 'private';
         logging.debug("Post type is private.");
@@ -518,24 +538,24 @@ def fetchSinglePost(url):
     else :
         logging.info("  Title = %s", infoDict['title']);
 
-    # datetime
-    infoDict['datetime'] = extractDatetime(respHtml);
+    # extract datetime
+    infoDict['datetime'] = extractDatetime(url, respHtml);
     if(not infoDict['datetime'] ) :
         logging.error("Can not extract post publish datetime for %s !", url);
         sys.exit(2);
     else :
         logging.debug("Extracted post publish datetime: %s", infoDict['datetime']);
 
-    # content
-    infoDict['content'] = extractContent(respHtml);
+    # extract content
+    infoDict['content'] = extractContent(url, respHtml);
     if(not infoDict['content'] ) :
         logging.error("Can not extract post content for %s !", url);
         sys.exit(2);
     # else :
         # logging.debug("Extracted post content: %s", infoDict['content']);
 
-    # category
-    infoDict['category'] = extractCategory(respHtml);
+    # extract category
+    infoDict['category'] = extractCategory(url, respHtml);
     if(infoDict['category']) :
         logging.debug("Extracted post's category: %s", infoDict['category']);
     else :
@@ -546,8 +566,12 @@ def fetchSinglePost(url):
 
     # if is modify post, no need: tags, comments
     if(gCfg['processType'] == "exportToWxr") :
-        # tags
-        infoDict['tags'] = extractTags(respHtml);
+        # extract tags
+        infoDict['tags'] = extractTags(url, respHtml);
+        # Note: some list contain [u''], so is not meaningful, remove it here
+        # for only [] is empty, [u''] is not empty -> error while exporting to WXR
+        infoDict['tags'] = crifanLib.removeEmptyInList(infoDict['tags']);
+        
         tags = "";
         for eachTag in infoDict['tags'] :
             tags += "%s, "%(eachTag);
@@ -558,8 +582,10 @@ def fetchSinglePost(url):
             crifanLib.calcTimeStart("process_comment");
             try :
                 infoDict['comments'] = fetchAndParseComments(url, respHtml);
-
-                logging.debug('Total extracted comments for this blog item = %d', len(infoDict['comments']));
+                
+                commentLen = len(infoDict['comments']);
+                if(commentLen > 0) :
+                    logging.info("    Extracted comments: %4d", commentLen);
             except :
                 logging.warning("Fail to process comments for %s", url);
 
@@ -889,6 +915,11 @@ def processBlogHeadInfo(blogInfoDic, username) :
     return;
 
 #------------------------------------------------------------------------------
+# convert the int value total seconds to hour,minute,second type string
+def toHourMinuteSecondStr(totalSecondsInt):
+    return ("%02d:%02d:%02d")%(totalSecondsInt / 3600, (totalSecondsInt % 3600)/60, totalSecondsInt % 60);
+
+#------------------------------------------------------------------------------
 # output statistic info
 def outputStatisticInfo() :
     totalTime = int(gVal['statInfoDict']['totalTime']);
@@ -909,21 +940,21 @@ def outputStatisticInfo() :
     # output output statistic info
     printDelimiterLine();
     logging.info("Total Processed [%04d] posts, averagely each consume seconds=%.4f", gVal['statInfoDict']['processedPostNum'], gVal['statInfoDict']['itemAverageTime']);
-    logging.info("Total Consume Time: %02d:%02d:%02d", totalTime / 3600, (totalTime % 3600)/60, totalTime % 60);
-    logging.info("  Find 1stLink: %02d:%02d:%02d", find1stLinkTime/3600, (find1stLinkTime%3600)/60, find1stLinkTime%60);
-    logging.info("  Process Post: %02d:%02d:%02d", processPostsTime/3600, (processPostsTime%3600)/60, processPostsTime%60);
-    logging.info("      Fetch   Pages     : %02d:%02d:%02d", fetchPageTime/3600, (fetchPageTime%3600)/60, fetchPageTime%60);
+    logging.info("Total Consume Time: %s", toHourMinuteSecondStr(totalTime));
+    logging.info("  Find 1stLink: %s", toHourMinuteSecondStr(find1stLinkTime));
+    logging.info("  Process Post: %s", toHourMinuteSecondStr(processPostsTime));
+    logging.info("      Fetch   Pages     : %s", toHourMinuteSecondStr(fetchPageTime));
     if(gCfg['processType'] == "exportToWxr") :
         if gCfg['processPic'] == 'yes' :
-            logging.info("      Process Pictures  : %02d:%02d:%02d", processPicTime/3600, (processPicTime%3600)/60, processPicTime%60);
+            logging.info("      Process Pictures  : %s", toHourMinuteSecondStr(processPicTime));
         if gCfg['processCmt'] == 'yes' :
-            logging.info("      Process Comments  : %02d:%02d:%02d", processCmtTime/3600, (processCmtTime%3600)/60, processCmtTime%60);
+            logging.info("      Process Comments  : %s", toHourMinuteSecondStr(processCmtTime));
     if gCfg['googleTrans'] == 'yes' :
-        logging.info("      Translate Name    : %02d:%02d:%02d", transNameTime/3600, (transNameTime%3600)/60, transNameTime%60);
+        logging.info("      Translate Name    : %s", toHourMinuteSecondStr(transNameTime));
     if(gCfg['processType'] == "exportToWxr") :
-        logging.info("  Export Head : %02d:%02d:%02d", exportHeadTime/3600, (exportHeadTime%3600)/60, exportHeadTime%60);
-        logging.info("  Export Posts: %02d:%02d:%02d", exportPostsTime/3600, (exportPostsTime%3600)/60, exportPostsTime%60);
-        logging.info("  Export Foot : %02d:%02d:%02d", exportFootTime/3600, (exportFootTime%3600)/60, exportFootTime%60);
+        logging.info("  Export Head : %s", toHourMinuteSecondStr(exportHeadTime));
+        logging.info("  Export Posts: %s", toHourMinuteSecondStr(exportPostsTime));
+        logging.info("  Export Foot : %s", toHourMinuteSecondStr(exportFootTime));
 
     return;
 
@@ -1046,10 +1077,11 @@ def main():
     parser.add_option("-j","--autoJumpSensitivePost",action="store",type="string",default='yes',dest="autoJumpSensitivePost",help=u"自动跳过（即不更新处理）那些包含敏感信息的帖子：yes或no。默认为yes。比如如果去修改某些百度帖子的话，其会返回 '文章内容包含不合适内容，请检查'，'文章标题包含不合适内容，请检查',等提示，此处则可以自动跳过，不处理此类帖子。");
     
     logging.info(u"版本信息：%s", __VERSION__);
-    logging.info(u"1.如有bug，请将日志文件和bug截图等信息发至：admin(at)crifan.com");
-    logging.info(u"2.如果对于此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
-    logging.info(u"3.关于本程更多相关信息，以及详细的使用说明，请去这里：");
-    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪等博客搬家到WordPress");
+    logging.info(u"1.如发现bug，请将日志文件和bug截图等信息发至：admin(at)crifan.com");
+    logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
+    logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
+    #Change Here If Add New Blog Provider Support
+    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
         
@@ -1236,17 +1268,17 @@ def callBlogFunc(funcToCall, *paraList):
     blogProvider = "";
     
     funcName = funcToCall.func_name;
-    if(blogIsNetease()):
-        trueFunc = getattr(BlogNetease, funcName);
-        logging.debug("Now will call netease 163 function: %s", funcName);
-    elif (blogIsBaidu()) :
-        trueFunc = getattr(BlogBaidu, funcName);
-        logging.debug("Now will call baidu function: %s", funcName);
-    elif (blogIsSina()) :
-        trueFunc = getattr(BlogSina, funcName);
-        logging.debug("Now will call sina function: %s", funcName);
+    
+    blogProvider = gVal['blogProvider'];
+    if(blogProvider in gConst['blogs']):
+        blogProviderDict = gConst['blogs'][blogProvider];
+        blogModule = blogProviderDict['blogModule'];
+
+        blogDescStr = blogProviderDict['descStr'];
+        trueFunc = getattr(blogModule, funcName);
+        logging.debug("Now will call %s function: %s", blogDescStr, funcName);
     else:
-        logging.error("Invalid blog provider");
+        logging.error("Invalid blog provider: %s", blogProvider);
         sys.exit(2);
         return;
 
@@ -1276,33 +1308,20 @@ def callBlogFunc(funcToCall, *paraList):
         return;
 
 #------------------------------------------------------------------------------
-def blogIsBaidu() :
-    return (gVal['blogProvider'] == gConst['prodiverBaidu']);
-
-#------------------------------------------------------------------------------
-def blogIsNetease() :
-    return (gVal['blogProvider'] == gConst['prodiverNetease']);
-
-#------------------------------------------------------------------------------
-def blogIsSina() :
-    return (gVal['blogProvider'] == gConst['prodiverSina']);
-
-#------------------------------------------------------------------------------
-# check the blog provider from input url:
-# is baidu from http://hi.baidu.com/recommend_music/
-# is netease 163 from http://againinput4.blog.163.com/
-# is sina blog from http://blog.sina.com.cn/crifan2008
+# check the blog provider from input url
 def checkBlogProvider(inputUrl) :
-    if(inputUrl.find("hi.baidu.com") > 0 ) :
-        gVal['blogProvider'] = gConst['prodiverBaidu'];
-        logging.info("Your blog provider : Baidu Space.");
-    elif (inputUrl.find("blog.163.com") > 0 ) :
-        gVal['blogProvider'] = gConst['prodiverNetease'];
-        logging.info("Your blog provider : Netease 163 Blog.");
-    elif (inputUrl.find("blog.sina.com.cn") > 0 ) :
-        gVal['blogProvider'] = gConst['prodiverSina'];
-        logging.info("Your blog provider : Sina Blog.");
-    else :
+    foundValidBlog = False;
+    for eachBlogStr in gConst['blogs'].keys() :
+        eachBlog = gConst['blogs'][eachBlogStr];
+        mandatoryStr = eachBlog['mandatoryIncStr'];
+        if(inputUrl.find(mandatoryStr) > 0 ):
+            blogModule = eachBlog['blogModule'];
+            logging.info("Your blog provider : %s.", eachBlog['descStr']);
+            gVal['blogProvider'] = eachBlogStr;
+            foundValidBlog = True;
+            break;
+
+    if(not foundValidBlog) :
         logging.error("Can not find out blog provider from %s", inputUrl);
         sys.exit(2);
 
@@ -1312,28 +1331,28 @@ def checkBlogProvider(inputUrl) :
 ################################################################################
 
 #------------------------------------------------------------------------------
-# extract title fom respHtml
-def extractTitle(respHtml):
-    return callBlogFunc(extractTitle, respHtml);
+# extract title fom url, respHtml
+def extractTitle(url, respHtml):
+    return callBlogFunc(extractTitle, url, respHtml);
 
 #------------------------------------------------------------------------------
-# extract datetime fom respHtml
-def extractDatetime(respHtml) :
-    return callBlogFunc(extractDatetime, respHtml);
+# extract datetime fom url, respHtml
+def extractDatetime(url, respHtml) :
+    return callBlogFunc(extractDatetime, url, respHtml);
 
 #------------------------------------------------------------------------------
-# extract blog item content fom respHtml
-def extractContent(respHtml) :
-    return callBlogFunc(extractContent, respHtml);
+# extract blog item content fom url, respHtml
+def extractContent(url, respHtml) :
+    return callBlogFunc(extractContent, url, respHtml);
 #------------------------------------------------------------------------------
-# extract category from respHtml
-def extractCategory(respHtml) :
-    return callBlogFunc(extractCategory, respHtml);
+# extract category from url, respHtml
+def extractCategory(url, respHtml) :
+    return callBlogFunc(extractCategory, url, respHtml);
     
 #------------------------------------------------------------------------------
-# extract tags info from respHtml
-def extractTags(respHtml) :
-    return callBlogFunc(extractTags, respHtml);
+# extract tags info from url, respHtml
+def extractTags(url, respHtml) :
+    return callBlogFunc(extractTags, url, respHtml);
 
 #------------------------------------------------------------------------------
 # fetch and parse comments
@@ -1341,8 +1360,8 @@ def fetchAndParseComments(url, respHtml):
     return callBlogFunc(fetchAndParseComments, url, respHtml);
 
 #------------------------------------------------------------------------------
-def findNextPermaLink(respHtml):
-    return callBlogFunc(findNextPermaLink, respHtml);
+def findNextPermaLink(url, respHtml):
+    return callBlogFunc(findNextPermaLink, url, respHtml);
 
 #------------------------------------------------------------------------------
 def parseDatetimeStrToLocalTime(datetimeStr):
@@ -1372,8 +1391,8 @@ def loginBlog(username, password) :
 
 #------------------------------------------------------------------------------
 # check whether this post is private(self only) or not
-def isPrivatePost(respHtml) :
-    return callBlogFunc(isPrivatePost, respHtml);
+def isPrivatePost(url, respHtml) :
+    return callBlogFunc(isPrivatePost, url, respHtml);
 
 ####### Modify post while in Login Mode ######
 #------------------------------------------------------------------------------

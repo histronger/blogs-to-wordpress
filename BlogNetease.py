@@ -25,7 +25,7 @@ import cookielib;
 from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.2";
+__VERSION__ = "v1.3";
 
 gConst = {
     'blogApi163'        : "http://api.blog.163.com",
@@ -708,8 +708,8 @@ def getFoundPicInfo(foundPic):
 ################################################################################
 
 #------------------------------------------------------------------------------
-# extract title fom html
-def extractTitle(html):
+# extract title fom url, html
+def extractTitle(url, html):
     titXmlSafe = '';
     try :
         soup = htmlToSoup(html);
@@ -728,8 +728,8 @@ def extractTitle(html):
 
 
 #------------------------------------------------------------------------------
-# extract datetime fom html
-def extractDatetime(html) :
+# extract datetime fom url, html
+def extractDatetime(url, html) :
     datetimeStr = '';
     try :
         soup = htmlToSoup(html);
@@ -742,8 +742,8 @@ def extractDatetime(html) :
 
 
 #------------------------------------------------------------------------------
-# extract blog item content fom html
-def extractContent(html) :
+# extract blog item content fom url, html
+def extractContent(url, html) :
     contentStr = '';
     try :
         soup = htmlToSoup(html);
@@ -763,8 +763,8 @@ def extractContent(html) :
     return contentStr;
 
 #------------------------------------------------------------------------------
-# extract category from html
-def extractCategory(html) :
+# extract category from url, html
+def extractCategory(url, html) :
     catXmlSafe = '';
     try :
         soup = htmlToSoup(html);
@@ -778,8 +778,8 @@ def extractCategory(html) :
     return catXmlSafe;
 
 #------------------------------------------------------------------------------
-# extract tags info from html
-def extractTags(html) :
+# extract tags info from url, html
+def extractTags(url, html) :
     tagList = [];
     try :
         soup = htmlToSoup(html);
@@ -796,10 +796,6 @@ def extractTags(html) :
         #searched = blogTagP.search(nbInitStr)
         tags = searched.group("blogTag");
         tagList = tags.split(',');
-        
-        # note: here for list, [u''] is not empty, only [] is empty
-        tagList = crifanLib.removeEmptyInList(tagList);
-
     except :
         tagList = [];
 
@@ -826,8 +822,8 @@ def fetchAndParseComments(url, html):
     return parsedCommentsList;
 
 #------------------------------------------------------------------------------
-# find next permanent link from html
-def findNextPermaLink(html) :
+# find next permanent link from url, html
+def findNextPermaLink(url, html) :
     nextLinkStr = '';
     try :
         soup = htmlToSoup(html);
@@ -1213,7 +1209,7 @@ def loginBlog(username, password) :
 #------------------------------------------------------------------------------
 # check whether this post is private(self only) or not
 # if error while check, consider it to non-private
-def isPrivatePost(html) :
+def isPrivatePost(url, html) :
     isPrivate = False;
     
     # private posts:
@@ -1384,4 +1380,4 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
 
 #------------------------------------------------------------------------------
 if __name__=="BlogNetease":
-    print "Imported: %s, %s"%( __name__, __VERSION__);
+    print "Imported: %s,\t%s"%( __name__, __VERSION__);
