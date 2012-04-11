@@ -8,6 +8,10 @@ For BlogsToWordpress, this file contains the functions for Netease 163 blog.
 1. add support for friendOnly type post detect
 2. support modify 163 post
 
+[History]
+v1.4:
+1. change charset from invalid GB18030 to valid UTF-8 when modify post.
+
 """
 
 import os;
@@ -25,7 +29,7 @@ import cookielib;
 from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.3";
+__VERSION__ = "v1.4";
 
 gConst = {
     'blogApi163'        : "http://api.blog.163.com",
@@ -710,21 +714,20 @@ def getFoundPicInfo(foundPic):
 #------------------------------------------------------------------------------
 # extract title fom url, html
 def extractTitle(url, html):
-    titXmlSafe = '';
+    titleUni = '';
     try :
         soup = htmlToSoup(html);
         foundTitle = soup.find(attrs={"class":"tcnt"});
         
         # foundTitle should not empty
         # foundTitle.string is unicode type here
-        titStr = foundTitle.string.strip();
-        titNoUniNum = crifanLib.repUniNumEntToChar(titStr);
-        titXmlSafe = saxutils.escape(titNoUniNum);
-        logging.debug("Extrated title=%s", titXmlSafe);
+        titleStr = foundTitle.string.strip();
+        titleUni = unicode(titleStr);
+        logging.debug("Extrated title=%s", titleUni);
     except : 
-        titXmlSafe = '';
+        titleUni = '';
 
-    return titXmlSafe;
+    return titleUni;
 
 
 #------------------------------------------------------------------------------
@@ -765,17 +768,16 @@ def extractContent(url, html) :
 #------------------------------------------------------------------------------
 # extract category from url, html
 def extractCategory(url, html) :
-    catXmlSafe = '';
+    catUni = '';
     try :
         soup = htmlToSoup(html);
         foundCat = soup.find(attrs={"class":"fc03 m2a"});
         catStr = foundCat.string.strip();
-        catNoUniNum = crifanLib.repUniNumEntToChar(catStr);
-        catXmlSafe = saxutils.escape(catNoUniNum);
+        catUni = unicode(catStr);
     except :
-        catXmlSafe = "";
+        catUni = "";
 
-    return catXmlSafe;
+    return catUni;
 
 #------------------------------------------------------------------------------
 # extract tags info from url, html
@@ -911,7 +913,7 @@ def extractBlogTitAndDesc(blogEntryUrl) :
 # (3) hi_ysj            in http://blog.163.com/hi_ysj/
 def extractBlogUser(inputUrl):
     #print "inputUrl=",inputUrl;
-
+    
     (extractOk, extractedBlogUser, generatedBlogEntryUrl) = (False, "", "");
 
     try :
@@ -1302,14 +1304,43 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
         errInfo = "Can't extract NETEASE_BLOG_TOKEN_EDITBLOG from getBlogUrl response html.";
         return (modifyOk, errInfo);
 
+    #  location.vcd = 'http://api.blog.163.com/cap/captcha.jpgx?parentId=172799491&r=';
+    foundCaptcha = re.search(r"location\.vcd\s+?=\s+?'(?P<captchaUrl>.+?)';", getBlogRespHtml);
+    if(foundCaptcha) :
+        captchaUrl = foundCaptcha.group("captchaUrl");
+
+        # process verify code == captcha
+        # url is:
+        #http://api.blog.163.com/cap/captcha.jpgx?parentId=172799491&r=581079
+        #captchaUrl = "http://api.blog.163.com/cap/captcha.jpgx";
+        #captchaUrl += "?parentId=" + parentId;
+        
+        captchaUrl += "581079"
+        # print "captchaUrl=",captchaUrl;
+        # respHtml = crifanLib.getUrlRespHtml(captchaUrl);
+        
+        # captchaDir = "captcha";
+        # #captchaPicFile = "returned_captcha.jpg";
+        # captchaPicFile = datetime.now().strftime('%Y%m%d_%H%M%S') + "_captcha.jpg";
+        
+        # saveToFile = captchaDir + "/" + captchaPicFile;
+        # crifanLib.saveBinDataToFile(respHtml, saveToFile);
+        # print "save verify code pic OK";
+        
+        # captchaCode = crifanLib.parseCaptchaFromPicFile(saveToFile);
+        # print "captchaCode=",captchaCode;
+        
+        # cccccccccccc
+    
     # now to modify post
 
     #http://api.blog.163.com/againinput4/editBlogNew.do?p=1&n=0
     modifyPostUrl = "http://api.blog.163.com/" + gVal['blogUser'] + "/editBlogNew.do?p=1&n=0";
     logging.debug("modifyPostUrl=%s", modifyPostUrl);
     
-    newPostContentGb18030 = newPostContentUni.encode("GB18030");
-    titleGb18030 = title.encode("GB18030");
+    validCharsetForSubmit = "UTF-8"; # if here use "GB18030" -> after submit, the chinese char is messy code !!!
+    newPostContentGb18030 = newPostContentUni.encode(validCharsetForSubmit);
+    titleGb18030 = title.encode(validCharsetForSubmit);
 
     postDict = {
         "tag"           : "", #should find original blog tags,

@@ -13,6 +13,14 @@ crifan's common functions, implemented by Python.
 [TODO]
 1. use htmlentitydefs instead of mannually made html entity table
 
+[History]
+[v1.5]
+1.add timeout for all urllib2.urlopen to try to avoid dead url link
+
+[v1.4]
+1.add support overwrite header for getUrlResponse
+2.add gzip support for getUrlResponse and getUrlRespHtml
+
 """
 
 __author__ = "Crifan Li (admin@crifan.com)"
@@ -32,9 +40,14 @@ from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
 #import htmlentitydefs;
 import struct;
+import zlib;
+
+# from PIL import Image;
+# from operator import itemgetter;
+
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.2";
+__VERSION__ = "v1.5";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -43,6 +56,8 @@ gConst = {
     # here use Tuple to avoid unexpected change
     # note: for tuple, refer item use tuple[i], not tuple(i)
     'picSufList'   : ('bmp', 'gif', 'jpeg', 'jpg', 'jpe', 'png', 'tiff', 'tif'),
+    
+    'defaultTimeout': 20, # default timeout seconds for urllib2.urlopen
 }
 
 #----------------------------------global values--------------------------------
@@ -535,7 +550,7 @@ def isFileValid(fileUrl) :
     try :
         origFileName = fileUrl.split('/')[-1];
         #print "origFileName=",origFileName;
-        resp = urllib2.urlopen(fileUrl); # note: Python 2.6 has added timeout support.
+        resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']); # note: Python 2.6 has added timeout support.
         #print "resp=",resp;
         realUrl = resp.geturl();
         #print "realUrl=",realUrl;
@@ -614,10 +629,13 @@ def manuallyDownloadFile(fileUrl, fileToSave) :
     try :
         if fileUrl :
             # 1. find real address
-            resp = urllib2.urlopen(fileUrl);
+            #print "fileUrl=",fileUrl;
+            resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']);
+            #print "resp=",resp;
             realUrl = resp.geturl(); # not same with original file url if redirect
             
-            respHtml = getUrlRespHtml(realUrl);
+            # if url is invalid, then add timeout can avoid dead
+            respHtml = getUrlRespHtml(realUrl, useGzip=False, timeout=gConst['defaultTimeout']);
             
             isDownOK = saveBinDataToFile(respHtml, fileToSave);
         else :
@@ -633,7 +651,7 @@ def manuallyDownloadFile(fileUrl, fileToSave) :
 # get response from url
 # note: if you have already used cookiejar, then here will automatically use it
 # while using rllib2.Request
-def getUrlResponse(url, postDict={}, headerDict={}, timeout=0) :
+def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
     # makesure url is string, not unicode, otherwise urllib2.urlopen will error
     url = str(url);
 
@@ -645,15 +663,32 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0) :
         req = urllib2.Request(url);
 
     if(headerDict) :
-        print "added header:",headerDict;
+        #print "added header:",headerDict;
         for key in headerDict.keys() :
             req.add_header(key, headerDict[key]);
 
-    req.add_header('User-Agent', gConst['userAgentIE9']);
-    req.add_header('Cache-Control', 'no-cache');
-    req.add_header('Accept', '*/*');
-    #req.add_header('Accept-Encoding', 'gzip, deflate');
-    req.add_header('Connection', 'Keep-Alive');
+    defHeaderDict = {
+        'User-Agent'    : gConst['userAgentIE9'],
+        'Cache-Control' : 'no-cache',
+        'Accept'        : '*/*',
+        'Connection'    : 'Keep-Alive',
+    };
+
+    # add default headers firstly
+    for eachDefHd in defHeaderDict.keys() :
+        #print "add default header: %s=%s"%(eachDefHd,defHeaderDict[eachDefHd]);
+        req.add_header(eachDefHd, defHeaderDict[eachDefHd]);
+
+    if(useGzip) :
+        #print "use gzip for",url;
+        req.add_header('Accept-Encoding', 'gzip, deflate');
+
+    # add customized header later -> allow overwrite default header 
+    if(headerDict) :
+        #print "added header:",headerDict;
+        for key in headerDict.keys() :
+            req.add_header(key, headerDict[key]);
+
     if(timeout > 0) :
         # set timeout value if necessary
         resp = urllib2.urlopen(req, timeout=timeout);
@@ -664,9 +699,31 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0) :
 
 #------------------------------------------------------------------------------
 # get response html==body from url
-def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0) :
-    resp = getUrlResponse(url, postDict, headerDict, timeout);
+#def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
+def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=True) :
+    resp = getUrlResponse(url, postDict, headerDict, timeout, useGzip);
     respHtml = resp.read();
+    if(useGzip) :
+        #print "---before unzip, len(respHtml)=",len(respHtml);
+        respInfo = resp.info();
+        
+        # Server: nginx/1.0.8
+        # Date: Sun, 08 Apr 2012 12:30:35 GMT
+        # Content-Type: text/html
+        # Transfer-Encoding: chunked
+        # Connection: close
+        # Vary: Accept-Encoding
+        # ...
+        # Content-Encoding: gzip
+        
+        # sometime, the request use gzip,deflate, but actually returned is un-gzip html
+        # -> response info not include above "Content-Encoding: gzip"
+        # eg: http://blog.sina.com.cn/s/comment_730793bf010144j7_3.html
+        # -> so here only decode when it is indeed is gziped data
+        if( ("Content-Encoding" in respInfo) and (respInfo['Content-Encoding'] == "gzip")) :
+            respHtml = zlib.decompress(respHtml, 16+zlib.MAX_WBITS);
+            #print "+++ after unzip, len(respHtml)=",len(respHtml);
+
     return respHtml;
 
 ################################################################################
@@ -693,6 +750,136 @@ def checkAllCookiesExist(cookieNameList, cookieJar) :
     return allCookieFound;
 
 ################################################################################
+# Image
+################################################################################
+
+# import Image,ImageEnhance,ImageFilter;
+
+
+# def testCaptcha():
+    # #http://www.pythonclub.org/project/captcha/python-pil
+    
+    # #image_name = "20120409_134346_captcha.jpg";
+    # #image_name = "20120409_134531_captcha.jpg";
+    # #image_name = "20120409_134625_captcha.jpg";
+    # #image_name = "20120409_134928_captcha.jpg";
+    # image_name = "20120409_135233_captcha.jpg";
+    
+    # im = Image.open(image_name);
+    # print "open OK for=",image_name;
+    # filter = ImageFilter.MedianFilter();
+    # print "MedianFilter OK";
+    # im = im.filter(filter);
+    # print "filter OK";
+    # enhancer = ImageEnhance.Contrast(im);
+    # print "Contrast OK";
+    # im = enhancer.enhance(2);
+    # print "enhance OK"; 
+    # im = im.convert('1');
+    # print "convert OK"; 
+    # #im.show()
+    # #print "show OK"; 
+    
+    # im.save(image_name + "_new.gif"); 
+    # print "save OK"; 
+    
+    # ooooooooooooooooo
+
+# #------------------------------------------------------------------------------
+# # [uncompleted]
+# # parse input picture file to captcha(verify code)
+# def parseCaptchaFromPicFile(inputCaptFilename):
+    # #http://www.wausita.com/captcha/
+    
+    # parsedCaptchaStr = "";
+    
+    
+    # # picFp = open(inputCaptFilename, "rb");
+    # # print "open pic file OK,picFp=",picFp;
+    # # picData = picFp.read();
+    # # print "read pic file OK";
+    # # picFp.close();
+    # # print "len(picData)=",len(picData);
+
+
+    # print "------------------capta test begin -----------------";
+    # captchaDir = "captcha";
+    # #inputCaptFilename = "returned_captcha.jpg";
+    # #inputCaptFilename = "captcha.gif";
+    # print "inputCaptFilename=",inputCaptFilename;
+    # inputCaptFilename = inputCaptFilename.split("/")[-1];
+    # captchaPicFile = captchaDir + "/" + inputCaptFilename;
+    # print "captchaPicFile=",captchaPicFile;
+    
+    # im = Image.open(captchaPicFile);
+    # im = im.convert("P");
+    # im2 = Image.new("P", im.size, 255);
+
+    # temp = {};
+
+    # # 225 571
+    # # 219 253
+    # # 189 82
+    # # 132 64
+    # # 90 63
+    # # 224 63
+    # # 139 48
+    # # 182 47
+    # # 133 43
+    # # 96 39
+
+
+
+    # his = im.histogram();
+
+    # print im.histogram();
+
+    # values = {};
+
+    # for i in range(256):
+      # values[i] = his[i];
+
+    # mostCommonColor = sorted(values.items(), key=itemgetter(1), reverse=True)[:10];
+    # print type(mostCommonColor);
+    
+    # print "-----most 0-9:-----";
+    # for key in mostCommonColor:
+        # #print type(key);
+        # print key;
+
+    # startIdx = 0;
+    # endIdx = 3;
+    # outputGifName = captchaPicFile + "_from-%d_to-%d.gif"%(startIdx, endIdx);
+
+    # #mostCommonColor = mostCommonColor[0:3]; # good result -> 0.8 similar
+    # #mostCommonColor = mostCommonColor[0:2]; # not bad result -> 0.7 similar
+    # mostCommonColor = mostCommonColor[startIdx:endIdx];
+    
+    # print "-----most %d-%d:-----"%(startIdx, endIdx);
+    # for j,k in mostCommonColor:
+      # print j,k;
+    
+
+    # mostCommonColorDict = dict(mostCommonColor);
+    # print mostCommonColorDict;
+    
+    # for x in range(im.size[1]):
+        # for y in range(im.size[0]):
+            # pix = im.getpixel((y,x));
+            # temp[pix] = pix;
+            # #if pix == 220 or pix == 227: # these are the numbers to get
+            # if pix in mostCommonColorDict:
+                # #print pix;
+                # im2.putpixel((y,x),0);
+
+    # im2.save(outputGifName);    
+   
+    # print "------------------capta test done -----------------";
+
+    # return parsedCaptchaStr;
+    
+    
+################################################################################
 # Functions that depend on third party lib
 ################################################################################
 
@@ -712,7 +899,7 @@ def getStrPossibleCharset(inputStr) :
     possibleCharset = "ascii";
     #possibleCharset = "UTF-8";
     encInfo = chardet.detect(inputStr);
-    #print "encInfo=",encInfo;
+    print "encInfo=",encInfo;
     if (encInfo['confidence'] > 0.5):
         possibleCharset = encInfo['encoding'];
     return possibleCharset;

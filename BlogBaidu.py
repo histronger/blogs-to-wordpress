@@ -345,7 +345,7 @@ def getFoundPicInfo(foundPic):
 #------------------------------------------------------------------------------
 # extract title fom url, html
 def extractTitle(url, html):
-    titXmlSafe = "";
+    titleUni = "";
     try :
         soup = htmlToSoup(html);
         tit = soup.findAll(attrs={"class":"tit"})[1];
@@ -361,13 +361,11 @@ def extractTitle(url, html):
                 # <div class="tit"><span style="color:#E8A02B">【转】</span>各地区关于VPI/VCI值</div>        
                 titStr = tit.contents[0].string + tit.contents[1].string;
                 
-            if(titStr) :
-                titNoUniNum = crifanLib.repUniNumEntToChar(titStr);
-                titXmlSafe = saxutils.escape(titNoUniNum);
+            titleUni = unicode(titStr);
     except : 
-        titXmlSafe = "";
+        titleUni = "";
         
-    return titXmlSafe;
+    return titleUni;
 
 #------------------------------------------------------------------------------
 # extract datetime fom url, html
@@ -418,23 +416,22 @@ def extractContent(url, html) :
 #------------------------------------------------------------------------------
 # extract category from url, html
 def extractCategory(url, html) :
-    catXmlSafe = '';
+    catUni = '';
     try :
         soup = htmlToSoup(html);
         foundCat = soup.find(attrs={"class":"opt"}).findAll('a')[0];
         catStr = foundCat.string.strip();
-        catNoUniNum = crifanLib.repUniNumEntToChar(catStr);
         
         unicodeCat = u'类别：';
         # also can use following line:
         #unicodeCat = ('类别：').decode('utf-8'); # makesure current file is UTF-8 format, then '类别：' is UTF-8, and ('类别：').decode('utf-8') can work
-
-        catNoUniNum = catNoUniNum.replace(unicodeCat, '');        
-        catXmlSafe = saxutils.escape(catNoUniNum);
+        catStr = catStr.replace(unicodeCat, '');
+        
+        catUni = unicode(catStr);
     except :
-        catXmlSafe = "";
+        catUni = "";
 
-    return catXmlSafe;
+    return catUni;
 
 #------------------------------------------------------------------------------
 # extract tags info from url, html

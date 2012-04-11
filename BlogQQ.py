@@ -20,7 +20,7 @@ from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
 import crifanLib;
 import cookielib;
-from xml.sax import saxutils;
+#from xml.sax import saxutils;
 import json; # New in version 2.6.
 import random;
 
@@ -898,7 +898,7 @@ def getPostInfoDictFromUrl(url):
 #------------------------------------------------------------------------------
 # extract post title
 def extractTitle(url, html):
-    titXmlSafe = "";
+    titleUni = "";
 
     try :
         #logging.debug("extractTitle: input html: \n%s", html);
@@ -908,15 +908,12 @@ def extractTitle(url, html):
         
         if(postInfoDict) :
             titleUni = postInfoDict['title'];
-            if(titleUni) :
-                titNoUniNum = crifanLib.repUniNumEntToChar(titleUni);
-                titXmlSafe = saxutils.escape(titNoUniNum);
         else :
             logging.debug("Can't get post title for returned empty post info dict");
     except : 
-        titXmlSafe = "";
+        titleUni = "";
 
-    return titXmlSafe;
+    return titleUni;
 
 #------------------------------------------------------------------------------
 # find next permanent link of current post
@@ -1013,19 +1010,18 @@ def extractContent(url, html) :
 #------------------------------------------------------------------------------
 # extract post category
 def extractCategory(url, html) :
-    catXmlSafe = '';
+    catUni = '';
     try :
         postInfoDict = getPostInfoDictFromUrl(url);
         
         if(postInfoDict) :
             categoryUni = postInfoDict['category'];
             logging.debug("categoryUni=%s", categoryUni);
-            classNoUniNum = crifanLib.repUniNumEntToChar(categoryUni);
-            catXmlSafe = saxutils.escape(classNoUniNum);
+            catUni = unicode(categoryUni);
     except :
-        catXmlSafe = "";
+        catUni = "";
 
-    return catXmlSafe;
+    return catUni;
 
 #------------------------------------------------------------------------------
 # extract post tags

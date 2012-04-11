@@ -26,7 +26,7 @@ from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
 import crifanLib;
 import cookielib;
-from xml.sax import saxutils;
+#from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
 __VERSION__ = "v1.4";
@@ -224,23 +224,19 @@ def find1stPermalink():
 #------------------------------------------------------------------------------
 # extract title fom url, html
 def extractTitle(url, html):
-    titXmlSafe = "";
+    titleUni = "";
     try :
         soup = htmlToSoup(html);
         
         #<h2 id="t_3d55a9b70100nyl8" class="titName SG_txta">[转载]学习笔记之三年自然灾害</h2>
         titName = soup.find(attrs={"class":"titName SG_txta"});
         if(titName) :
-            titString = titName.string;
-            titleUni = unicode(titString);
-
-            if(titleUni) :
-                titNoUniNum = crifanLib.repUniNumEntToChar(titleUni);
-                titXmlSafe = saxutils.escape(titNoUniNum);
+            titleStr = titName.string;
+            titleUni = unicode(titleStr);
     except : 
-        titXmlSafe = "";
+        titleUni = "";
         
-    return titXmlSafe;
+    return titleUni;
 
 #------------------------------------------------------------------------------
 # find next permanent link from url, html
@@ -321,7 +317,7 @@ def extractContent(url, html) :
 #------------------------------------------------------------------------------
 # extract category from url, html
 def extractCategory(url, html) :
-    catXmlSafe = '';
+    catUni = '';
     try :
         soup = htmlToSoup(html);
         # <td class="blog_class">
@@ -335,13 +331,11 @@ def extractCategory(url, html) :
         foundClass = soup.find(attrs={"class":"blog_class"});
         if(foundClass.a) :
             classStr = foundClass.a.string;
-            
-            classNoUniNum = crifanLib.repUniNumEntToChar(classStr);
-            catXmlSafe = saxutils.escape(classNoUniNum);
+            catUni = unicode(classStr);
     except :
-        catXmlSafe = "";
+        catUni = "";
 
-    return catXmlSafe;
+    return catUni;
 
 #------------------------------------------------------------------------------
 # extract tags info from url, html

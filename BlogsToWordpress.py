@@ -3,12 +3,12 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v5.6
+版本：     v6.2
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
 【详细信息】
-BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间等博客搬家到WordPress
+BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
@@ -22,6 +22,9 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 【版本历史】
+[v6.2]
+1. add RenRen Blog support.
+2. For title and category, move repUniNumEntToChar and saxutils.escape from different blog providers into main function
 [v5.6]
 1.（当评论数据超多的时候，比如sina韩寒博客帖子评论，很多都是2,3万个的）添加日志信息，显示当前已处理多少个评论。
 
@@ -48,10 +51,11 @@ import BlogNetease;
 import BlogBaidu;
 import BlogSina;
 import BlogQQ;
+import BlogRenren;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v5.6";
+__VERSION__ = "v6.2";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
@@ -89,6 +93,12 @@ gConst = {
             # special one http://blog.qq.com/qzone/622007179/1333268691.htm
             'mandatoryIncStr'   : ".qq.com",
             'descStr'           : "QQ Space",
+        },
+
+        'Renren' : {
+            'blogModule'        : BlogRenren,
+            'mandatoryIncStr'   : ".renren.com",
+            'descStr'           : "Renren Blog",
         },
     } ,
 };
@@ -149,6 +159,7 @@ gCfg ={
     # 163 : TODO
     # sina : TODO
     # QQ: TODO
+    # Renren: TODO
     'autoJumpSensitivePost' : '',
 };
 
@@ -158,7 +169,7 @@ gCfg ={
 # just print whole line
 def printDelimiterLine() :
     logging.info("%s", '-'*80);
-    return 
+    return ;
 
 #------------------------------------------------------------------------------
 # open export file name in rw mode, return file handler
@@ -173,10 +184,10 @@ def openExportFile():
 def createOutputFile():
     global gVal;
     gVal['exportFileName'] = "WXR_" + gVal['blogProvider'] + '_[' + gVal['blogUser'] + "]_" + datetime.now().strftime('%Y%m%d_%H%M')+ '-0' + '.xml';
-    f = codecs.open(gVal['exportFileName'], 'w', 'utf-8');
-    if f:
+    expFile = codecs.open(gVal['exportFileName'], 'w', 'utf-8');
+    if expFile:
         logging.info('Created export WXR file: %s', gVal['exportFileName']);
-        f.close();
+        expFile.close();
     else:
         logging.error("Can not open writable exported WXR file: %s", gVal['exportFileName']);
         sys.exit(2);
@@ -206,6 +217,8 @@ def processPhotos(blogContent):
         try :
             crifanLib.calcTimeStart("process_all_picture");
             logging.debug("Begin to process all pictures");
+            
+            logging.debug("before find pic, post Conten=%s", blogContent);
 
             processPicCfgDict = {
                 'allPicUrlPat'      : r"",  # search pattern for all pic, should not include '()'
@@ -220,9 +233,7 @@ def processPhotos(blogContent):
   
             allUrlPattern = processPicCfgDict['allPicUrlPat'];
             #print "allUrlPattern=",allUrlPattern;
-            
-            #logging.debug("before find pic, blogConten=%s", blogContent);
-            
+
             # if matched, result for findall() is a list when no () in pattern
             matchedList = re.findall(allUrlPattern, blogContent);
             #print "Len(matchedList)=",len(matchedList);
@@ -509,11 +520,15 @@ def fetchSinglePost(url):
     infoDict['respHtml']= respHtml;
     
     # extract title
-    infoDict['title'] =  extractTitle(url, respHtml);    
+    infoDict['title'] =  extractTitle(url, respHtml);
     if(not infoDict['title'] ) :
         logging.error("Can not extract post title for %s !", url);
         sys.exit(2);
     else :
+        infoDict['title'] = crifanLib.repUniNumEntToChar(infoDict['title']);
+        # for later export to WXR, makesure is xml safe
+        infoDict['title'] = saxutils.escape(infoDict['title']);
+        
         logging.debug("Extracted post title: %s", infoDict['title']);
 
     # extrat next (previously published) blog item link
@@ -557,21 +572,24 @@ def fetchSinglePost(url):
         sys.exit(2);
     # else :
         # logging.debug("Extracted post content: %s", infoDict['content']);
-
+    
     # extract category
     infoDict['category'] = extractCategory(url, respHtml);
     if(infoDict['category']) :
+        infoDict['category'] = crifanLib.repUniNumEntToChar(infoDict['category']);
+        infoDict['category'] = saxutils.escape(infoDict['category']);
         logging.debug("Extracted post's category: %s", infoDict['category']);
     else :
         # here category must not empty, otherwise last export will faill for
         # keyError for: category_nicename = gVal['catNiceDict'][entry['category']],
         infoDict['category'] = "DefaultCategory";
         logging.debug("Extracted post's category is empty, set to default one: %s", infoDict['category']);
-
+    
     # if is modify post, no need: tags, comments
     if(gCfg['processType'] == "exportToWxr") :
         # extract tags
         infoDict['tags'] = extractTags(url, respHtml);
+
         # Note: some list contain [u''], so is not meaningful, remove it here
         # for only [] is empty, [u''] is not empty -> error while exporting to WXR
         infoDict['tags'] = crifanLib.removeEmptyInList(infoDict['tags']);
@@ -580,7 +598,7 @@ def fetchSinglePost(url):
         for eachTag in infoDict['tags'] :
             tags += "%s, "%(eachTag);
         logging.debug("Extracted %d tags: %s", len(infoDict['tags']), tags);
-
+        
         # fetch comments
         if gCfg['processCmt'] == 'yes' :
             crifanLib.calcTimeStart("process_comment");
@@ -594,7 +612,7 @@ def fetchSinglePost(url):
                 logging.warning("Fail to process comments for %s", url);
 
             gVal['statInfoDict']['processCmtTime'] += crifanLib.calcTimeEnd("process_comment");
-    
+
     return infoDict;
 
 #------------------------------------------------------------------------------
@@ -1097,7 +1115,7 @@ def main():
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
     #Change Here If Add New Blog Provider Support
-    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间等博客搬家到WordPress");
+    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
         
@@ -1206,7 +1224,7 @@ def main():
     
     while permalink:
         infoDict = fetchSinglePost(permalink);
-
+       
         if(not infoDict['omit']) :
             processSinglePost(infoDict);
 
