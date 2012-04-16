@@ -3,12 +3,12 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v6.2
+版本：     v7.0
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
 【详细信息】
-BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网等博客搬家到WordPress
+BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
@@ -22,9 +22,13 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 【版本历史】
+[v7.0]
+1.add CSDN blog support.
+
 [v6.2]
 1. add RenRen Blog support.
 2. For title and category, move repUniNumEntToChar and saxutils.escape from different blog providers into main function
+
 [v5.6]
 1.（当评论数据超多的时候，比如sina韩寒博客帖子评论，很多都是2,3万个的）添加日志信息，显示当前已处理多少个评论。
 
@@ -52,6 +56,7 @@ import BlogBaidu;
 import BlogSina;
 import BlogQQ;
 import BlogRenren;
+import BlogCsdn;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
@@ -99,6 +104,12 @@ gConst = {
             'blogModule'        : BlogRenren,
             'mandatoryIncStr'   : ".renren.com",
             'descStr'           : "Renren Blog",
+        },
+        
+        'Csdn' : {
+            'blogModule'        : BlogCsdn,
+            'mandatoryIncStr'   : "blog.csdn.net",
+            'descStr'           : "CSDN Blog",
         },
     } ,
 };
@@ -156,10 +167,7 @@ gCfg ={
     #Change Here If Add New Blog Provider Support
     # for modify post, auto jump over the post of 
     # baidu: "文章内容包含不合适内容，请检查", "文章标题包含不合适内容，请检查"
-    # 163 : TODO
-    # sina : TODO
-    # QQ: TODO
-    # Renren: TODO
+    # other blog : TODO
     'autoJumpSensitivePost' : '',
 };
 
@@ -218,7 +226,7 @@ def processPhotos(blogContent):
             crifanLib.calcTimeStart("process_all_picture");
             logging.debug("Begin to process all pictures");
             
-            logging.debug("before find pic, post Conten=%s", blogContent);
+            #logging.debug("before find pic, post Conten=%s", blogContent);
 
             processPicCfgDict = {
                 'allPicUrlPat'      : r"",  # search pattern for all pic, should not include '()'
@@ -593,6 +601,9 @@ def fetchSinglePost(url):
         # Note: some list contain [u''], so is not meaningful, remove it here
         # for only [] is empty, [u''] is not empty -> error while exporting to WXR
         infoDict['tags'] = crifanLib.removeEmptyInList(infoDict['tags']);
+        
+        for i in range(len(infoDict['tags'])):
+            infoDict['tags'][i] = saxutils.escape(infoDict['tags'][i]);
         
         tags = "";
         for eachTag in infoDict['tags'] :
@@ -1115,7 +1126,7 @@ def main():
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
     #Change Here If Add New Blog Provider Support
-    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网等博客搬家到WordPress");
+    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
         
