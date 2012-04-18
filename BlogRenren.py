@@ -339,7 +339,7 @@ def containSpecialChar(titleStrong):
 #------------------------------------------------------------------------------
 # extract post title
 def extractTitle(url, html):
-    titleUni = "";
+    (needOmit, titleUni) = (False, "");
     try :
         logging.debug("url=%s", url);
         logging.debug("extractTitle:html=%s", html);
@@ -385,9 +385,9 @@ def extractTitle(url, html):
             titleUni = unicode(titleUni);
             #print "titleUni=",titleUni;
     except : 
-        titleUni = "";
+        (needOmit, titleUni) = (False, "");
         
-    return titleUni;
+    return (needOmit, titleUni);
 
 #------------------------------------------------------------------------------
 # find next permanent link of current post
@@ -745,7 +745,7 @@ def extractCmtLiSoupList(html):
     if(foundCommentList):
         cmtSoupList = foundCommentList.findAll("li");
         #print "cmtSoupList=",cmtSoupList;
-        print "len(cmtSoupList)=",len(cmtSoupList);
+        #print "len(cmtSoupList)=",len(cmtSoupList);
 
     return cmtSoupList;
 

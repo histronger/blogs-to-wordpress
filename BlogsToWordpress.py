@@ -3,12 +3,12 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v7.0
+版本：     v8.3
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
 【详细信息】
-BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN等博客搬家到WordPress
+BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐sohu等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
@@ -22,6 +22,11 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 【版本历史】
+[v8.3]
+1. add Sohu blog support.
+2. add auto omit invalid/hidden post which returned by extractTitle.
+3. add remove control char for comment author and content
+
 [v7.0]
 1.add CSDN blog support.
 
@@ -57,10 +62,11 @@ import BlogSina;
 import BlogQQ;
 import BlogRenren;
 import BlogCsdn;
+import BlogSohu;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v6.2";
+__VERSION__ = "v8.3";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
@@ -110,6 +116,12 @@ gConst = {
             'blogModule'        : BlogCsdn,
             'mandatoryIncStr'   : "blog.csdn.net",
             'descStr'           : "CSDN Blog",
+        },
+
+        'Sohu' : {
+            'blogModule'        : BlogSohu,
+            'mandatoryIncStr'   : "blog.sohu.com",
+            'descStr'           : "Sohu Blog",
         },
     } ,
 };
@@ -300,14 +312,13 @@ def processPhotos(blogContent):
                                     suffix = 'jpg';
                                 suffix = suffix.lower();
                                 
-                                #print "picUrl=",picUrl
-                                #print "filename=",filename;
-                                #print "suffix=",suffix
-                                #print "picInfoDict['fields']=",picInfoDict['fields'];
+                                # print "picUrl=",picUrl
+                                # print "filename=",filename;
+                                # print "suffix=",suffix
+                                # print "picInfoDict['fields']=",picInfoDict['fields'];
                             
                                 # indeed is pic, process it
                                 (picIsValid, errReason) = crifanLib.isFileValid(curUrl);
-                                
                                 #print "picIsValid=",picIsValid;
                                 if picIsValid :
                                     # 1. prepare info
@@ -528,7 +539,7 @@ def fetchSinglePost(url):
     infoDict['respHtml']= respHtml;
     
     # extract title
-    infoDict['title'] =  extractTitle(url, respHtml);
+    (needOmit, infoDict['title']) = extractTitle(url, respHtml);
     if(not infoDict['title'] ) :
         logging.error("Can not extract post title for %s !", url);
         sys.exit(2);
@@ -536,7 +547,6 @@ def fetchSinglePost(url):
         infoDict['title'] = crifanLib.repUniNumEntToChar(infoDict['title']);
         # for later export to WXR, makesure is xml safe
         infoDict['title'] = saxutils.escape(infoDict['title']);
-        
         logging.debug("Extracted post title: %s", infoDict['title']);
 
     # extrat next (previously published) blog item link
@@ -553,7 +563,10 @@ def fetchSinglePost(url):
         logging.debug("Post type is public.");
         infoDict['type'] = 'publish';
 
-    if((gCfg['postTypeToProcess'] == "privateOnly") and (not isPrivate)) :
+    if(needOmit):
+        logging.info("  Omit process current post: %s", infoDict['title']);
+        infoDict['omit'] = True;
+    elif((gCfg['postTypeToProcess'] == "privateOnly") and (not isPrivate)) :
         logging.info("  Omit process non-private post: %s", infoDict['title']);
         infoDict['omit'] = True;
     elif((gCfg['postTypeToProcess'] == "publicOnly") and isPrivate) :
@@ -837,15 +850,17 @@ def exportPost(entry, user):
     lastRepTime = 0;
     
     for curCmtNum, comment in enumerate(entry['comments']):
+        cmtContentNoCtrlChr = crifanLib.removeCtlChr(comment['content']);
+        authorNoCtrlChr = crifanLib.removeCtlChr(comment['author']);
         commentsStr += commentT.substitute(
                             commentId = comment['id'],
-                            commentAuthor = packageCDATA(comment['author']),
+                            commentAuthor = packageCDATA(authorNoCtrlChr),
                             commentEmail = comment['author_email'],
                             commentURL = comment['author_url'],
                             commentAuthorIP = comment['author_IP'],
                             commentDate = comment['date'],
                             commentDateGMT = comment['date_gmt'],
-                            commentContent = packageCDATA(comment['content']),
+                            commentContent = packageCDATA(cmtContentNoCtrlChr),
                             commentParent = comment['parent'],);
         # report for each maxNumReportOnce
         curRepTime = curCmtNum/maxNumReportOnce;
@@ -1126,7 +1141,7 @@ def main():
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
     #Change Here If Add New Blog Provider Support
-    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN等博客搬家到WordPress");
+    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
         

@@ -6,6 +6,10 @@ For BlogsToWordpress, this file contains the functions for QQ Space.
 
 [TODO]
 
+[History]
+[v1.6]
+1. add 'ignore' for string decode to avoid decode fail
+
 """
 
 import os;
@@ -25,7 +29,7 @@ import json; # New in version 2.6.
 import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.5";
+__VERSION__ = "v1.6";
 
 gConst = {
     'spaceDomain'  : 'http://user.qzone.qq.com',
@@ -241,13 +245,21 @@ def parseDataStrToInfoDict(dataJsonStr) :
         validCharset = defCmtCharset;
         try :
             # 1. normal try decode
-            dataJsonStrUni = dataJsonStr.decode(validCharset);
+            #dataJsonStrUni = dataJsonStr.decode(validCharset);
+            dataJsonStrUni = dataJsonStr.decode(validCharset, 'ignore'); # avoid decode fail for decode default use 'strict'
             logging.debug("use default charset %s do decode is OK", validCharset);
+            #logging.debug("dataJsonStr=%s", dataJsonStr);
             
             dataDict = json.loads(dataJsonStrUni, encoding=validCharset);
             infoDict = dataDict['data'];
             logging.debug("use default charset %s do json.loads is OK", validCharset);
         except :
+            # now in most case, that is even for special :
+            # case 2: http://user.qzone.qq.com/622007179/blog/1218912726
+            # and case 3 : http://user.qzone.qq.com/622000169/blog/1252395085
+            # here can decode OK with 'ignore'
+            # that means, fowllow code normally will not execute, but still keep it here for pertential some (future) special case
+            
             # 2. if above decode fail, then try to (find the real charset and ) convert to unicode fisrt
             logging.debug("dataJsonStr use default charset %s to decode but occur error !!!", validCharset);
 
@@ -257,7 +269,8 @@ def parseDataStrToInfoDict(dataJsonStr) :
             try :
                 # some comment is not GB2312, such as:
                 # "ISO-8859-2" for comment startIdx=180, getNum=57 for http://user.qzone.qq.com/622007179/blog/1218912726
-                dataJsonStrUni = dataJsonStr.decode(validCharset);
+                #dataJsonStrUni = dataJsonStr.decode(validCharset);
+                dataJsonStrUni = dataJsonStr.decode(validCharset, 'ignore');
                 logging.debug("dataJsonStr use %s decode OK", validCharset);
                 #logging.debug("after use %s decode, dataJsonStrUni=%s", validCharset, dataJsonStrUni);
                 
@@ -275,17 +288,24 @@ def parseDataStrToInfoDict(dataJsonStr) :
                 replacedReplylist = '"replylist":[ ]}}';
                 foundReplylist = re.search(replylistP, dataJsonStr, re.S);
                 if(foundReplylist) :
+                    #print "foundReplylist=",foundReplylist;
                     logging.debug("Found replylist: foundReplylist=%s", foundReplylist);
                     replylistJsonStr = foundReplylist.group("replylist");
                     #logging.debug("extract out the replylist json string:\n%s", replylistJsonStr);
                     
                     logging.debug("remove replylist");
-                    subP = re.compile(replylistP, re.S);
-                    dataJsonStr = subP.sub(replacedReplylist, dataJsonStr);
+
+                    #subP = re.compile(replylistP, re.S);
+                    #dataJsonStr = subP.sub(replacedReplylist, dataJsonStr); # work                    
+                    #dataJsonStr = re.sub(replylistP, replacedReplylist, dataJsonStr, re.S); # NOT work
+                    #dataJsonStr = re.sub(replylistP, replacedReplylist, dataJsonStr, 1, re.S); # work
+                    #dataJsonStr = re.sub(replylistP, replacedReplylist, dataJsonStr, 0, re.S); # work
+                    dataJsonStr = re.sub(replylistP, replacedReplylist, dataJsonStr, flags=re.S); # work
                     
                     validCharset = "GB18030";
                     logging.debug("then use charset %s to retry decode", validCharset);
-                    dataJsonStrUni = dataJsonStr.decode(validCharset);
+                    #dataJsonStrUni = dataJsonStr.decode(validCharset);
+                    dataJsonStrUni = dataJsonStr.decode(validCharset, 'ignore');
                     
                     logging.debug("then use charset %s do json loads", validCharset);
                     dataDict = json.loads(dataJsonStrUni, encoding=validCharset);
@@ -294,7 +314,7 @@ def parseDataStrToInfoDict(dataJsonStr) :
 
     except :
         logging.debug("Error while convert to dict for data json str:\n%s", dataJsonStr);
-
+    
     return infoDict;
 
 #------------------------------------------------------------------------------
@@ -898,7 +918,7 @@ def getPostInfoDictFromUrl(url):
 #------------------------------------------------------------------------------
 # extract post title
 def extractTitle(url, html):
-    titleUni = "";
+    (needOmit, titleUni) = (False, "");
 
     try :
         #logging.debug("extractTitle: input html: \n%s", html);
@@ -911,9 +931,9 @@ def extractTitle(url, html):
         else :
             logging.debug("Can't get post title for returned empty post info dict");
     except : 
-        titleUni = "";
+        (needOmit, titleUni) = (False, "");
 
-    return titleUni;
+    return (needOmit, titleUni);
 
 #------------------------------------------------------------------------------
 # find next permanent link of current post

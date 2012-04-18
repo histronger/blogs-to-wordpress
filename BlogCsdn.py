@@ -189,7 +189,7 @@ def find1stPermalink():
 #------------------------------------------------------------------------------
 # extract title
 def extractTitle(url, html):
-    titleUni = "";
+    (needOmit, titleUni) = (False, "");
     
     try :
         # <span class="link_title"><a href="/v_july_v/article/details/6543438">
@@ -277,13 +277,13 @@ def extractTitle(url, html):
             # print "titleUni=",titleUni;
     except : 
         logging.debug("Fail to extract tiltle from url=%s, html=\n%s", url, html);
-        titleUni = "";
+        (needOmit, titleUni) = (False, "");
     
     if(titleUni):
         gVal['processedUrl'].append(url);
         logging.debug("Added %s to processed url list", url);
 
-    return titleUni;
+    return (needOmit, titleUni);
 
 #------------------------------------------------------------------------------
 # fetch url list in article list page, eg:

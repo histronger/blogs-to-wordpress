@@ -224,7 +224,7 @@ def find1stPermalink():
 #------------------------------------------------------------------------------
 # extract title fom url, html
 def extractTitle(url, html):
-    titleUni = "";
+    (needOmit, titleUni) = (False, "");
     try :
         soup = htmlToSoup(html);
         
@@ -234,9 +234,9 @@ def extractTitle(url, html):
             titleStr = titName.string;
             titleUni = unicode(titleStr);
     except : 
-        titleUni = "";
+        (needOmit, titleUni) = (False, "");
         
-    return titleUni;
+    return (needOmit, titleUni);
 
 #------------------------------------------------------------------------------
 # find next permanent link from url, html

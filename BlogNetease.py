@@ -493,8 +493,7 @@ def fillComments(destCmtDict, srcCmtDict):
     destCmtDict['id'] = srcCmtDict['curCmtNum'];
 
     decodedNickname = srcCmtDict['publisherNickname'].decode('unicode-escape');
-    noCtrlChrNickname = crifanLib.removeCtlChr(decodedNickname);
-    destCmtDict['author'] = noCtrlChrNickname;
+    destCmtDict['author'] = decodedNickname;
     destCmtDict['author_email'] = srcCmtDict['publisherEmail'];
     destCmtDict['author_url'] = saxutils.escape(genNeteaseUserUrl(srcCmtDict['publisherName']));
     destCmtDict['author_IP'] = srcCmtDict['ip'];
@@ -515,8 +514,6 @@ def fillComments(destCmtDict, srcCmtDict):
     #logging.debug("before decode, coment content:\n%s", srcCmtDict['content']);
     cmtContent = srcCmtDict['content'].decode('unicode-escape'); # convert from \uXXXX to character
     #logging.debug("after decode, coment content:\n%s", cmtContent);
-    # remove invalid control char in comments content
-    cmtContent = crifanLib.removeCtlChr(cmtContent);
     destCmtDict['content'] = cmtContent;
 
     destCmtDict['approved'] = 1;
@@ -714,7 +711,7 @@ def getFoundPicInfo(foundPic):
 #------------------------------------------------------------------------------
 # extract title fom url, html
 def extractTitle(url, html):
-    titleUni = '';
+    (needOmit, titleUni) = (False, "");
     try :
         soup = htmlToSoup(html);
         foundTitle = soup.find(attrs={"class":"tcnt"});
@@ -725,9 +722,9 @@ def extractTitle(url, html):
         titleUni = unicode(titleStr);
         logging.debug("Extrated title=%s", titleUni);
     except : 
-        titleUni = '';
+        (needOmit, titleUni) = (False, "");
 
-    return titleUni;
+    return (needOmit, titleUni);
 
 
 #------------------------------------------------------------------------------

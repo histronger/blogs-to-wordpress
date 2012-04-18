@@ -14,6 +14,9 @@ crifan's common functions, implemented by Python.
 1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v1.6]
+1.add getCurTimestamp
+
 [v1.5]
 1.add timeout for all urllib2.urlopen to try to avoid dead url link
 
@@ -47,7 +50,7 @@ import zlib;
 
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.5";
+__VERSION__ = "v1.6";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -92,15 +95,24 @@ def genSufList() :
 ################################################################################
 
 #------------------------------------------------------------------------------
+# get current time's timestamp
+def getCurTimestamp() :
+    return datetimeToTimestamp(datetime.now());
+
+#------------------------------------------------------------------------------
 # convert datetime value to timestamp
 # from "2006-06-01 00:00:00" to 1149091200
 def datetimeToTimestamp(datetimeVal) :
     return int(time.mktime(datetimeVal.timetuple()));
-    
+
 #------------------------------------------------------------------------------
 # convert timestamp to datetime value
 # from 1149091200 to "2006-06-01 00:00:00"
 def timestampToDatetime(timestamp) :
+    #print "type(timestamp)=",type(timestamp);
+    #print "timestamp=",timestamp;
+    #timestamp = int(timestamp);
+    timestamp = float(timestamp);
     return datetime.fromtimestamp(timestamp);
 
 #------------------------------------------------------------------------------
@@ -556,19 +568,28 @@ def isFileValid(fileUrl) :
         #print "realUrl=",realUrl;
         newFileName = realUrl.split('/')[-1];
         #print "newFileName=",newFileName;
-        urlInfo = resp.info();
-        #print "urlInfo=",urlInfo;
-              
-        contentLen = urlInfo['Content-Length'];
+        respInfo = resp.info();
+        #print "respInfo=",respInfo;
+        respCode = resp.getcode();
+        #print "respCode=",respCode;
+
+        # special:
+        # http://116.img.pp.sohu.com/images/blog/2007/5/24/17/24/11355bf42a9.jpg
+        # return no content-length
+        #contentLen = respInfo['Content-Length'];
         
-        # eg: Content-Type= image/gif, ContentTypes : audio/mpeg
-        # more ContentTypes can refer: http://kenya.bokee.com/3200033.html
-        contentType = urlInfo['Content-Type'];
         # for redirect, if returned size>0 and filename is same, also should be considered valid
-        if (origFileName == newFileName) and (contentLen > 0):
+        #if (origFileName == newFileName) and (contentLen > 0):
+        # for redirect, if returned response code is 200(OK) and filename is same, also should be considered valid
+        if (origFileName == newFileName) and (respCode == 200):
             fileIsValid = True;
         else :
             fileIsValid = False;
+            
+            # eg: Content-Type= image/gif, ContentTypes : audio/mpeg
+            # more ContentTypes can refer: http://kenya.bokee.com/3200033.html
+            contentType = respInfo['Content-Type'];
+        
             errReason = "file url returned info: type=%s, len=%d, realUrl=%s"%(contentType, contentLen, realUrl);
     except urllib2.URLError,reason :
         fileIsValid = False;
@@ -899,7 +920,7 @@ def getStrPossibleCharset(inputStr) :
     possibleCharset = "ascii";
     #possibleCharset = "UTF-8";
     encInfo = chardet.detect(inputStr);
-    print "encInfo=",encInfo;
+    #print "encInfo=",encInfo;
     if (encInfo['confidence'] > 0.5):
         possibleCharset = encInfo['encoding'];
     return possibleCharset;

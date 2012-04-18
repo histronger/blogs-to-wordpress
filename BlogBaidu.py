@@ -117,8 +117,7 @@ def fillComments(destCmtDict, srcCmtDict):
     destCmtDict['id'] = srcCmtDict['id'];
     logging.debug("--- comment[%d] ---", destCmtDict['id']);
     
-    noCtrlChrUsername = crifanLib.removeCtlChr(srcCmtDict['user_name']);
-    destCmtDict['author'] = noCtrlChrUsername;
+    destCmtDict['author'] = srcCmtDict['user_name'];
     destCmtDict['author_email'] = '';
 
     if srcCmtDict['user_name'] :
@@ -140,8 +139,6 @@ def fillComments(destCmtDict, srcCmtDict):
     cmtContent = srcCmtDict['content'];
     #logging.debug("after decode, coment content:\n%s", cmtContent);
     cmtContent = filterHtmlTag(cmtContent);
-    # remove invalid control char in comments content
-    cmtContent = crifanLib.removeCtlChr(cmtContent);
     #logging.debug("after filtered, coment content:\n%s", cmtContent);
     destCmtDict['content'] = cmtContent;
 
@@ -345,7 +342,7 @@ def getFoundPicInfo(foundPic):
 #------------------------------------------------------------------------------
 # extract title fom url, html
 def extractTitle(url, html):
-    titleUni = "";
+    (needOmit, titleUni) = (False, "");
     try :
         soup = htmlToSoup(html);
         tit = soup.findAll(attrs={"class":"tit"})[1];
@@ -363,9 +360,9 @@ def extractTitle(url, html):
                 
             titleUni = unicode(titStr);
     except : 
-        titleUni = "";
+        (needOmit, titleUni) = (False, "");
         
-    return titleUni;
+    return (needOmit, titleUni);
 
 #------------------------------------------------------------------------------
 # extract datetime fom url, html
