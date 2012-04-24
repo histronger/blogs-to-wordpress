@@ -7,6 +7,11 @@ For BlogsToWordpress, this file contains the functions for QQ Space.
 [TODO]
 
 [History]
+v1.7:
+1.support this kind of pic:
+http://ctc.qzs.qq.com/qzone/space_item/orig/1/76673/module_1.jpg
+2. fixbug -> change from (?!=src\\") to (?<=src=\\") to support real preceded match
+
 [v1.6]
 1. add 'ignore' for string decode to avoid decode fail
 
@@ -29,7 +34,7 @@ import json; # New in version 2.6.
 import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.6";
+__VERSION__ = "v1.7";
 
 gConst = {
     'spaceDomain'  : 'http://user.qzone.qq.com',
@@ -1534,6 +1539,11 @@ def getProcessPhotoCfg():
     #http://blog.qq.com/qzone/94371314/1333558347.htm contain:
     #http://b100.photo.store.qq.com/psb?/V12MguqI01wN8j/2lWCO5dvToG63r9Hj*G0.ctM0o6bPCKOLlqu85df3RM!/o/YUeirjtpJAAAYl30ozvcIwAAb83cnTsNJAAA
 
+    #(7)
+    #http://user.qzone.qq.com/1919008415/blog/1335271336 contain:
+    #src=\"http://ctc.qzs.qq.com/qzone/space_item/orig/1/76673/module_1.jpg\"
+    
+    
     # possible othersite pic url:
 
     picSufChars = crifanLib.getPicSufChars();
@@ -1547,8 +1557,10 @@ def getProcessPhotoCfg():
         # 'singlePicUrlPat'  : r'http://(?P<fd1>\w+?)\.photo\.store\.qq\.com/http_imgload\.cgi\?/rurl4_b=(?P<filename>\w+)[&amp;b=\d]{0,30}',
 
         # find all above (1) - (5) type pic
-        'allPicUrlPat'     : r'(?!\\")http://\w+.photo\.store\.qq\.com/.*?/?[\w\*\.\!\-&;=^/]+(?=\\")',
-        'singlePicUrlPat'  : r'http://(?P<fd1>\w+)\.photo\.store\.qq\.com/.*?/?(?P<filename>[\w\*\.\!\-&;=^/]+)$',
+        #'allPicUrlPat'     : r'(?!\\")http://\w+.photo\.store\.qq\.com/.*?/?[\w\*\.\!\-&;=^/]+(?=\\")',
+        #'singlePicUrlPat'  : r'http://(?P<fd1>\w+)\.photo\.store\.qq\.com/.*?/?(?P<filename>[\w\*\.\!\-&;=^/]+)$',
+        'allPicUrlPat'     : r'(?<=src=\\")http://\w+?\.?\w+?\.?\w+?\.qq\.com/[^"]*?/?[\w\*\.\!\-&;=^/]+(?=\\")',
+        'singlePicUrlPat'  : r'http://(?P<fd1>\w+)(\.(?P<fd2>\w+?))?(\.(?P<fd3>\w+?))?\.qq\.com/[^"]*?/?(?P<filename>[\w\*\.\!\-&;=^/]+)$',
         
         # # not support (4) http://sz.photo.store.qq.com/rurl2=3637dbbeb..............50968bf355760d7b6
         # 'allPicUrlPat'     : r'(?!\\")http://\w+.photo\.store\.qq\.com/.*?/[\w\*\.\!\-&;\=^/^?]+(?=\\")',

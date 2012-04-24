@@ -1105,7 +1105,7 @@ def getProcessPhotoCfg():
     picSufChars = crifanLib.getPicSufChars();
     processPicCfgDict = {
         # here only extract last pic name contain: char,digit,-,_
-        'allPicUrlPat'      : r'(?!src=")http://\w{1,20}\.\w{1,20}\.\w{1,10}[\.]?\w*/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
+        'allPicUrlPat'      : r'(?<=src=")http://\w{1,20}\.\w{1,20}\.\w{1,10}[\.]?\w*/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
         'singlePicUrlPat'   : r'http://(?P<fd1>\w{1,20})\.(?P<fd2>\w{1,20})\.\w{1,10}[\.]?\w*/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
         
         'getFoundPicInfo'   : getFoundPicInfo,
