@@ -7,10 +7,12 @@ For BlogsToWordpress, this file contains the functions for Sina Blog.
 [TODO]
 
 【版本历史】
-[v1.4]
+v1.4:
 1.支持处理评论数目超多的帖子，比如：
 http://blog.sina.com.cn/s/blog_4701280b0101854o.html -> 2万多个评论
 http://blog.sina.com.cn/s/blog_4701280b0102e0p3.html -> 3万多个评论
+v1.5:
+1.添加支持其他网站图片
 
 """
 
@@ -29,7 +31,7 @@ import cookielib;
 #from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.4";
+__VERSION__ = "v1.5";
 
 gConst = {
     'spaceDomain'  : 'http://blog.sina.com.cn',
@@ -308,7 +310,7 @@ def extractContent(url, html) :
                 # logging.debug("[%d] is null", i);
         
         #logging.debug("---method 1: map and join---\n%s", contentStr);
-        # logging.debug("---method 2: enumerate   ---\n%s", originBlogContent);
+        #logging.debug("---method 2: enumerate   ---\n%s", originBlogContent);
     except :
         contentStr = '';
 
@@ -634,8 +636,20 @@ def fetchAndParseComments(url, html):
 def isSelfBlogPic(picInfoDict):
     isSelfPic = False;
 
-    # currently only support sina own pic, so here always True
-    isSelfPic = True;
+    filename = picInfoDict['filename'];
+    fd1 = picInfoDict['fields']['fd1'];
+    fd2 = picInfoDict['fields']['fd2'];
+    fd3 = picInfoDict['fields']['fd3'];
+    fd4 = picInfoDict['fields']['fd4'];
+    fd5 = picInfoDict['fields']['fd5'];
+    fd6 = picInfoDict['fields']['fd6'];
+
+    if (fd2 == "sinaimg") and (fd3 == "cn"):
+        isSelfPic = True;
+    else :
+        isSelfPic = False;
+
+    logging.debug("isSelfBlogPic: %s", isSelfPic);
 
     return isSelfPic;
 
@@ -650,10 +664,11 @@ def genNewOtherPicName(picInfoDict):
     #fd2 = picInfoDict['fields']['fd2'];
     #fd3 = picInfoDict['fields']['fd3'];
     
+    #60xkpa.bay.livefilestore.com
     #newOtherPicName = fd1 + '_' + fd2 + "_" + filename;
     newOtherPicName = fd1 + "_" + filename;
     
-    print "newOtherPicName=",newOtherPicName;
+    #print "newOtherPicName=",newOtherPicName;
 
     return newOtherPicName;
 
@@ -665,43 +680,43 @@ def getFoundPicInfo(foundPic):
     
     # here should corresponding to singlePicUrlPat in processPicCfgDict
     picUrl  = foundPic.group(0);
-    #print "picUrl=",picUrl;
-    fd1     = foundPic.group("fd1"); # for sina pic, is s9/s14/i0/...
-    #fd2     = foundPic.group("fd2"); # for sina pic, is sinaimg
-    #fd3     = foundPic.group("fd3"); # for sina pic, is cn
-    filename= foundPic.group("filename"); #3d55a9b7g9522d474a84d, not 3d55a9b7g9522d474a84d&amp;690
-    #print "filename=",filename;
+    fd1     = foundPic.group("fd1"); # s9/s14/i0/...
+    fd2     = foundPic.group("fd2"); # sinaimg
+    fd3     = foundPic.group("fd3"); # cn
+    fd4     = foundPic.group("fd4"); #
+    fd5     = foundPic.group("fd5"); #
+    fd6     = foundPic.group("fd6"); #
+    filename= foundPic.group("filename");
+    suffix  = foundPic.group("suffix");
+
+    # handle special sina pic filename
+    #3d55a9b7g9522d474a84d&amp;690 -> 3d55a9b7g9522d474a84d
+    filename = re.compile(r"&amp;\d+").sub("", filename);
     #3d55a9b7g9522d474a84d&amp;690 -> 3d55a9b7g9522d474a84d_690
     #filename = filename.replace("&amp;", "_");
-    #print "filename=",filename;
-
-    #suffix  = foundPic.group("suffix");
-    suffix = "";
-    #print "suffix=",suffix;
     
     picInfoDict = {
         'isSupportedPic': False,
         'picUrl'        : picUrl,
         'filename'      : filename,
-        'suffix'        : suffix, # empty for sina pic url: http://s14.sinaimg.cn/middle/3d55a9b7g9522d474a84d&690
+        'suffix'        : suffix,
         'fields'        : 
             {
                 'fd1' : fd1,
-                #'fd2' : fd2,
-                #'fd3' : fd3,
+                'fd2' : fd2,
+                'fd3' : fd3,
+                'fd4' : fd4,
+                'fd5' : fd5,
+                'fd6' : fd6,
             },
     };
-    
-    # if (suffix in crifanLib.getPicSufList()) :
-        # picInfoDict['isSupportedPic'] = True;
-    # else :
-        # # for special sina pic
-        # if(fd2 == "sinaimg") :
-            # picInfoDict['isSupportedPic'] = True;
 
-    # if match, must be sinaimg
-    picInfoDict['isSupportedPic'] = True;
-    #print "getFoundPicInfo: picInfoDict=",picInfoDict;
+    if (suffix in crifanLib.getPicSufList()) :
+        picInfoDict['isSupportedPic'] = True; # other site pic
+    else :
+        # own siet pic
+        if(fd2 == "sinaimg") and (fd3 == "cn") :
+            picInfoDict['isSupportedPic'] = True;
 
     return picInfoDict;
 
@@ -728,6 +743,14 @@ def getProcessPhotoCfg():
     
     #<p ALIGN="center"><img src="http://simg.sinajs.cn/blog7style/images/common/sg_trans.gif" real_src ="http://s9.sinaimg.cn/orignal/6f75ca11tb68f63636ef8&amp;690"  ALT="京城路光影路故宫&nbsp;<wbr>（原创）"  TITLE="京城路光影路故宫&nbsp;<wbr>（原创）" /></P>
     
+    #http://blog.sina.com.cn/s/blog_696e50390100ntoi.html contain:
+    #<a HREF="https&#58;//60xkpa.bay.livefilestore.com/y1mOcyiIMOvYzOmba2ELKRhpb5D98uIM2UKCCLI9GxqQNgxX1TvvC4WPFTRjxtGQMq_cB7APbXExSn-87K8Qb_vIL3N3OcknHKXG4ucD0RxXnhzZ-FXjGsMDW4zHsLoHeoxYSXUoaLHqgtIqYcnuyIeIA/CACFair_00022[2].jpg" TARGET="_blank"><img TITLE="CACFair_00022" STYLE="border-right&#58;0px;border-top&#58;0px;display&#58;inline;border-left&#58;0px;border-bottom&#58;0px" HEIGHT="462" ALT="CACFair_00022" src="http://simg.sinajs.cn/blog7style/images/common/sg_trans.gif" real_src ="https&#58;//60xkpa.bay.livefilestore.com/y1mVYI3SjAaWIwPe0GXgS9fY3dcym9Ljn1ZZvAZAn2TSX3f-6vgXmgZ6DAQoYBEZfUyb7NqLOYyBwR7gl3dP8aIcsxMUMGEOAtuNE8uuq6e358LQpfOcLiNchLCktKLMHAPBuVe8axwMwQCfry7y8j0MA/CACFair_00022_thumb.jpg" WIDTH="810" BORDER="0" /></A>
+    #and :
+    #<a HREF="https&#58;//60xkpa.bay.livefilestore.com/y1mzjnfENUIRruWVigbkZoAan8wibeljXM9_yeY-3yO87dXZehRswLJRtK8R2-fvVlrGI_rpEoe-_Pq42D8l3GtviiG81slJyh2Rjahi42Nc-Eg4El6VJlskgPL7jG_AHfRCe-PwOCni5RU_SLsH4ELqQ/IMG_7007ed[2].jpg" TARGET="_blank"><img TITLE="IMG_7007ed" STYLE="border-right&#58;0px;border-top&#58;0px;display&#58;inline;border-left&#58;0px;border-bottom&#58;0px" HEIGHT="540" ALT="IMG_7007ed" src="http://simg.sinajs.cn/blog7style/images/common/sg_trans.gif" real_src ="http://s3.sinaimg.cn/middle/696e5039496c126e73b82&amp;690" WIDTH="810" BORDER="0" /></A>
+    # note, after processed, html become:
+    #<a href="https://60xkpa.bay.livefilestore.com/y1mzjnfENUIRruWVigbkZoAan8wibeljXM9_yeY-3yO87dXZehRswLJRtK8R2-fvVlrGI_rpEoe-_Pq42D8l3GtviiG81slJyh2Rjahi42Nc-Eg4El6VJlskgPL7jG_AHfRCe-PwOCni5RU_SLsH4ELqQ/IMG_7007ed[2].jpg" target="_blank"><img title="IMG_7007ed" style="border-right:0px;border-top:0px;display:inline;border-left:0px;border-bottom:0px" height="540" alt="IMG_7007ed" src="http://simg.sinajs.cn/blog7style/images/common/sg_trans.gif" real_src="http://s3.sinaimg.cn/middle/696e5039496c126e73b82&amp;690" width="810" border="0" /></a>
+    
+    
     picSufChars = crifanLib.getPicSufChars();
     processPicCfgDict = {
         # here only extract last pic name contain: char,digit,-,_
@@ -738,12 +761,19 @@ def getProcessPhotoCfg():
         # currently only support sina self blog middle type pic
         #'allPicUrlPat'     : r'http://\w+?\.sinaimg\.cn/middle/\w+?&amp;\d+',
         #'allPicUrlPat'     : r'http://\w+?\.sinaimg\.cn/\w*?middle/\w+[&]?[amp;]{0,4}\d{0,3}',
-        'allPicUrlPat'     : r'http://\w+?\.sinaimg\.cn/\w+/\w+[&]?[amp;]{0,4}\d{0,3}',
+        #'allPicUrlPat'     : r'http://\w+?\.sinaimg\.cn/\w+/\w+[&]?[amp;]{0,4}\d{0,3}',
         #                                      fd1                             filename                
         #'singlePicUrlPat'  : r'http://(?P<fd1>\w+?)\.sinaimg\.cn/middle/(?P<filename>\w+?)&amp;\d+',
         #'singlePicUrlPat'  : r'http://(?P<fd1>\w+?)\.sinaimg\.cn/\w*?middle/(?P<filename>\w+)(&amp;\d+)?',
-        'singlePicUrlPat'  : r'http://(?P<fd1>\w+?)\.sinaimg\.cn/\w+/(?P<filename>\w+)(&amp;\d+)?',
-        
+        #'singlePicUrlPat'  : r'http://(?P<fd1>\w+?)\.sinaimg\.cn/\w+/(?P<filename>\w+)(&amp;\d+)?',
+
+        #Note here url is NOT like this:
+        #real_src ="https&#58;//60xkpa.bay.livefilestore.com/xxx/CACFair_00022_thumb.jpg"
+        # have been processed, like this:
+        #real_src="https://60xkpa.bay.livefilestore.com/xxx/CACFair_00022_thumb.jpg"
+        'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[\w%\-=^"]*/?[\w%\-=/^"]+/[\w^"\-\.&;=\[\]]+(?=")',
+        'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/.+?/(?P<filename>[\w\[\]&;=\-]+)(\.(?P<suffix>\w{3,4})?)?',
+
         'getFoundPicInfo'       : getFoundPicInfo,
         'isSelfBlogPic'         : isSelfBlogPic,
         'genNewOtherPicName'    : genNewOtherPicName,

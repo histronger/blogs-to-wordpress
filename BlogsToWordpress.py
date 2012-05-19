@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v8.3
+版本：     v8.6
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -22,6 +22,13 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 【版本历史】
+[v8.6]
+1.support other site pic for BlogSina
+2.support quoted filename check for crifanLib
+
+[v8.4]
+1.support more type pic for BlogQQ
+
 [v8.3]
 1. add Sohu blog support.
 2. add auto omit invalid/hidden post which returned by extractTitle.
@@ -66,7 +73,7 @@ import BlogSohu;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v8.3";
+__VERSION__ = "v8.6";
 
 gConst = {
     'generator'         : "http://www.crifan.com",

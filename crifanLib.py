@@ -14,6 +14,9 @@ crifan's common functions, implemented by Python.
 1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v1.7]
+1.bugfix-> isFileValid support quoted & lower for compare filename
+
 [v1.6]
 1.add getCurTimestamp
 
@@ -50,7 +53,7 @@ import zlib;
 
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.6";
+__VERSION__ = "v1.7";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -560,14 +563,25 @@ def isFileValid(fileUrl) :
     errReason = "Unknown error";
 
     try :
+        #print "original fileUrl=",fileUrl;
         origFileName = fileUrl.split('/')[-1];
         #print "origFileName=",origFileName;
+        
+        #old: https://ie2zeq.bay.livefilestore.com/y1mo7UWr-TrmqbBhkw52I0ii__WE6l2UtMRSTZHSky66-uDxnCdKPr3bdqVrpUcQHcoJLedlFXa43bvCp_O0zEGF3JdG_yZ4wRT-c2AQmJ_TNcWvVZIXfBDgGerouWyx19WpA4I0XQR1syRJXjDNpwAbQ/IMG_5214_thumb[1].jpg
+        #new: https://kxoqva.bay.livefilestore.com/y1mQlGjwNAYiHKoH5Aw6TMNhsCmX2YDR3vPKnP86snuqQEtnZgy3dHkwUvZ61Ah8zU3AGiS4whmm_ADrvxdufEAfMGo56KjLdhIbosn9F34olQ/IMG_5214_thumb%5b1%5d.jpg
+        quotedOrigFilenname = urllib.quote(origFileName); # IMG_5214_thumb%5b1%5d
+        #print "quotedOrigFilenname=",quotedOrigFilenname
+        lowQuotedOrigFilename = quotedOrigFilenname.lower();
+        
         resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']); # note: Python 2.6 has added timeout support.
         #print "resp=",resp;
         realUrl = resp.geturl();
         #print "realUrl=",realUrl;
-        newFileName = realUrl.split('/')[-1];
-        #print "newFileName=",newFileName;
+        newFilename = realUrl.split('/')[-1];
+        #print "newFilename=",newFilename;
+        lowNewFilename = newFilename.lower();
+        #print "lowNewFilename=",lowNewFilename;
+        
         respInfo = resp.info();
         #print "respInfo=",respInfo;
         respCode = resp.getcode();
@@ -579,9 +593,10 @@ def isFileValid(fileUrl) :
         #contentLen = respInfo['Content-Length'];
         
         # for redirect, if returned size>0 and filename is same, also should be considered valid
-        #if (origFileName == newFileName) and (contentLen > 0):
+        #if (origFileName == newFilename) and (contentLen > 0):
         # for redirect, if returned response code is 200(OK) and filename is same, also should be considered valid
-        if (origFileName == newFileName) and (respCode == 200):
+        #if (origFileName == newFilename) and (respCode == 200):
+        if (lowQuotedOrigFilename == lowNewFilename) and (respCode == 200):
             fileIsValid = True;
         else :
             fileIsValid = False;
