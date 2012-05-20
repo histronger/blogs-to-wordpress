@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v8.6
+版本：     v8.7
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -22,6 +22,9 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 【版本历史】
+[v8.7]
+1.support all type of other site pic for BlogSina
+
 [v8.6]
 1.support other site pic for BlogSina
 2.support quoted filename check for crifanLib
@@ -73,7 +76,7 @@ import BlogSohu;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v8.6";
+__VERSION__ = "v8.7";
 
 gConst = {
     'generator'         : "http://www.crifan.com",

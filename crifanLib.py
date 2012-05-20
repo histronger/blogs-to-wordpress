@@ -14,6 +14,9 @@ crifan's common functions, implemented by Python.
 1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v1.8]
+1.bugfix-> isFileValid support unquoted & lower for compare filename
+
 [v1.7]
 1.bugfix-> isFileValid support quoted & lower for compare filename
 
@@ -53,7 +56,7 @@ import zlib;
 
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.7";
+__VERSION__ = "v1.8";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -569,9 +572,10 @@ def isFileValid(fileUrl) :
         
         #old: https://ie2zeq.bay.livefilestore.com/y1mo7UWr-TrmqbBhkw52I0ii__WE6l2UtMRSTZHSky66-uDxnCdKPr3bdqVrpUcQHcoJLedlFXa43bvCp_O0zEGF3JdG_yZ4wRT-c2AQmJ_TNcWvVZIXfBDgGerouWyx19WpA4I0XQR1syRJXjDNpwAbQ/IMG_5214_thumb[1].jpg
         #new: https://kxoqva.bay.livefilestore.com/y1mQlGjwNAYiHKoH5Aw6TMNhsCmX2YDR3vPKnP86snuqQEtnZgy3dHkwUvZ61Ah8zU3AGiS4whmm_ADrvxdufEAfMGo56KjLdhIbosn9F34olQ/IMG_5214_thumb%5b1%5d.jpg
-        quotedOrigFilenname = urllib.quote(origFileName); # IMG_5214_thumb%5b1%5d
-        #print "quotedOrigFilenname=",quotedOrigFilenname
-        lowQuotedOrigFilename = quotedOrigFilenname.lower();
+        unquotedOrigFilenname = urllib.unquote(origFileName);
+        #print "unquotedOrigFilenname=",unquotedOrigFilenname
+        lowUnquotedOrigFilename = unquotedOrigFilenname.lower();
+        #print "lowUnquotedOrigFilename=",lowUnquotedOrigFilename;
         
         resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']); # note: Python 2.6 has added timeout support.
         #print "resp=",resp;
@@ -579,8 +583,12 @@ def isFileValid(fileUrl) :
         #print "realUrl=",realUrl;
         newFilename = realUrl.split('/')[-1];
         #print "newFilename=",newFilename;
-        lowNewFilename = newFilename.lower();
-        #print "lowNewFilename=",lowNewFilename;
+        
+        #http://blog.sina.com.cn/s/blog_696e50390100ntxs.html
+        unquotedNewFilename = urllib.unquote(newFilename);
+        #print "unquotedNewFilename=",unquotedNewFilename;
+        unquotedLowNewFilename = unquotedNewFilename.lower();
+        #print "unquotedLowNewFilename=",unquotedLowNewFilename;
         
         respInfo = resp.info();
         #print "respInfo=",respInfo;
@@ -596,7 +604,7 @@ def isFileValid(fileUrl) :
         #if (origFileName == newFilename) and (contentLen > 0):
         # for redirect, if returned response code is 200(OK) and filename is same, also should be considered valid
         #if (origFileName == newFilename) and (respCode == 200):
-        if (lowQuotedOrigFilename == lowNewFilename) and (respCode == 200):
+        if (lowUnquotedOrigFilename == unquotedLowNewFilename) and (respCode == 200):
             fileIsValid = True;
         else :
             fileIsValid = False;

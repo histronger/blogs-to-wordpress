@@ -689,11 +689,29 @@ def getFoundPicInfo(foundPic):
     filename= foundPic.group("filename");
     suffix  = foundPic.group("suffix");
 
+    #print "suffix=",suffix;
+    #y1mo7UWr-T......0ii__WE6l2.......DNpwAbQ/IMG_5214_thumb[1].jpg ->
+    #IMG_5214_thumb[1].jpg
+    #print "filename=",filename;
+    filename = filename.split("/")[-1];
+    #print "filename=",filename;
+    #try to extract real suffix
+    extractedSuffix = filename.split(".")[-1];
+    if(extractedSuffix) and (extractedSuffix in crifanLib.getPicSufList()):
+        #print "real suffix is",extractedSuffix;
+        suffix = extractedSuffix;
+        filename = re.compile(r"\.\w+$").sub("", filename);
+            
     # handle special sina pic filename
     #3d55a9b7g9522d474a84d&amp;690 -> 3d55a9b7g9522d474a84d
     filename = re.compile(r"&amp;\d+").sub("", filename);
-    #3d55a9b7g9522d474a84d&amp;690 -> 3d55a9b7g9522d474a84d_690
-    #filename = filename.replace("&amp;", "_");
+    #y1p_SxhIJn......uua?PARTNER=WRITER -> 
+    #y1p_SxhIJn......uua
+    filename = filename.replace("?PARTNER=WRITER", "");
+    #print "after remove ?PARTNER=WRITER, filename=",filename;
+    
+    filename = crifanLib.removeNonWordChar(filename);
+    #print "valid filename=",filename;
     
     picInfoDict = {
         'isSupportedPic': False,
@@ -711,13 +729,15 @@ def getFoundPicInfo(foundPic):
             },
     };
 
-    if (suffix in crifanLib.getPicSufList()) :
-        picInfoDict['isSupportedPic'] = True; # other site pic
-    else :
-        # own siet pic
-        if(fd2 == "sinaimg") and (fd3 == "cn") :
-            picInfoDict['isSupportedPic'] = True;
+    # if (suffix in crifanLib.getPicSufList()) :
+        # picInfoDict['isSupportedPic'] = True; # other site pic
+    # elif(fd2 == "sinaimg") and (fd3 == "cn") :
+        # # own siet pic
+        # picInfoDict['isSupportedPic'] = True;
 
+    # here always set to True for if it is real_src, then it must be sina pic
+    picInfoDict['isSupportedPic'] = True;
+    
     return picInfoDict;
 
 #------------------------------------------------------------------------------
@@ -771,8 +791,11 @@ def getProcessPhotoCfg():
         #real_src ="https&#58;//60xkpa.bay.livefilestore.com/xxx/CACFair_00022_thumb.jpg"
         # have been processed, like this:
         #real_src="https://60xkpa.bay.livefilestore.com/xxx/CACFair_00022_thumb.jpg"
-        'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[\w%\-=^"]*/?[\w%\-=/^"]+/[\w^"\-\.&;=\[\]]+(?=")',
-        'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/.+?/(?P<filename>[\w\[\]&;=\-]+)(\.(?P<suffix>\w{3,4})?)?',
+        #'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[\w%\-=^"]*/?[\w%\-=/^"]+/[\w^"\-\.&;=\[\]]+(?=")',
+        #'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/.+?/(?P<filename>[\w\[\]&;=\-]+)(\.(?P<suffix>\w{3,4})?)?',
+        
+        'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[^"]*/?[^"]+/?[^"]+(?=")',
+        'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/[^"]*?/?(?P<filename>[^"]+)(\.(?P<suffix>\w{3,4}))?',
 
         'getFoundPicInfo'       : getFoundPicInfo,
         'isSelfBlogPic'         : isSelfBlogPic,
