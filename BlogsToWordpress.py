@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v8.7
+版本：     v9.1
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -19,9 +19,12 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 1.增加对于friendOnly类型帖子的支持。
 2.支持自定义导出特定类型的帖子为public和private。
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
-4.可能的话，支持处理每个帖子的过程中就导出，而非最后一次性导出。
 
 【版本历史】
+[v9.1]
+1.export WXR during processing => whole process speed become a little bit faster !
+2.change default pic prefix path to http://localhost/wp-content/uploads/pic
+
 [v8.7]
 1.support all type of other site pic for BlogSina
 
@@ -64,6 +67,7 @@ from optparse import OptionParser;
 from string import Template,replace;
 import xml;
 from xml.sax import saxutils;
+
 import crifanLib;
 
 import BlogNetease;
@@ -76,15 +80,15 @@ import BlogSohu;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v8.7";
+__VERSION__ = "v9.1";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
-    'tailInfo'          : """
+    'tailUni'           : u"""
 
-    </channel>
-    </rss>""",
-    'picRootPathInWP'   : "http://localhost/wordpress/wp-content/uploads",
+</channel>
+</rss>""",
+    'picRootPathInWP'   : "http://localhost/wp-content/uploads/pic",
     'othersiteDirName'  : 'other_site',
 
     #Change Here If Add New Blog Provider Support
@@ -142,24 +146,55 @@ gVal = {
     'postList'              : [],
     'catNiceDict'           : {}, # store { catName: catNiceName}
     'tagSlugDict'           : {}, # store { tagName: tagSlug}
+    'curItem'               : { 'catNiceDict':{}, 
+                                'tagSlugDict':{},
+                                },
     'postID'                : 0,
     'blogUser'              : '',
     'blogEntryUrl'          : '',
     'processedUrlList'      : [],
     'processedStUrlList'    : [],
     'replacedUrlDict'       : {},
-    'exportFileName'        : '',
+    'outputFileName'        : '',
     'fullHeadInfo'          : '', #  include : header + category + generator
     'statInfoDict'          : {}, # store statistic info
     'errorUrlList'          : [], # store the (pic) url, which error while open
     'postModifyPattern'     : '', # the string, after repalce the pattern, used for each post
+    
+    'wxrHeaderUni'          : '',
+    'wxrHeaderSize'         : 0,
+    
+    'generatorUni'          : '',
+    'generatorSize'         : 0,
+    
+    'tailUni'               : '',
+    'tailSize'              : 0,
+    
+    'categoriesUni'         : '',
+    'categoriesSize'        : 0,
+    
+    'tagsUni'               : '',
+    'tagsSize'              : 0,
+    
+    'itemsUni'              : '',
+    'itemsSize'             : 0,
+    
+    'curGeneratedUni'       : '',
+    'curGeneratedSize'       : 0,
+    
+    'wxrValidUsername'      : '',
+    'curOutputFileIdx'      : 0,
+    'outputFileCreateTime'  : '',
+    
+    'nextCatId'        : 1,
+    'nextTagId'        : 1,
 };
 
 #--------------------------configurable values---------------------------------
 gCfg ={
 # For defalut setting for following config value, please refer parameters.
     # where to save the downloaded pictures
-    # Default (in code) set to: gConst['picRootPathInWP'] + '/' + gVal['blogUser'] + "/pic"
+    # Default (in code) set to: gConst['picRootPathInWP']
     'picPathInWP'       : '',
     # Default (in code) set to: gCfg['picPathInWP'] + '/' + gConst['othersiteDirName']
     'otherPicPathInWP'  : '',
@@ -202,24 +237,36 @@ def printDelimiterLine() :
     return ;
 
 #------------------------------------------------------------------------------
-# open export file name in rw mode, return file handler
-def openExportFile():
+# open output file name in rw mode, return file handler
+def openOutputFile():
     global gVal;
     # 'a+': read,write,append
     # 'w' : clear before, then write
-    return codecs.open(gVal['exportFileName'], 'a+', 'utf-8');
+    return codecs.open(gVal['outputFileName'], 'a+', 'utf-8');
 
 #------------------------------------------------------------------------------
-# just create output file
-def createOutputFile():
+# init for output file
+def initForOutputFile():
     global gVal;
-    gVal['exportFileName'] = "WXR_" + gVal['blogProvider'] + '_[' + gVal['blogUser'] + "]_" + datetime.now().strftime('%Y%m%d_%H%M')+ '-0' + '.xml';
-    expFile = codecs.open(gVal['exportFileName'], 'w', 'utf-8');
+    gVal['curOutputFileIdx'] = 0;
+    gVal['outputFileCreateTime'] = datetime.now().strftime('%Y%m%d_%H%M');
+    return;
+
+#------------------------------------------------------------------------------
+# just create new output file
+def createNewOutputFile():
+    global gVal;
+    gVal['outputFileName'] = "WXR_" + gVal['blogProvider'] + '_[' + gVal['blogUser'] + "]_" + gVal['outputFileCreateTime'] + '-' + str(gVal['curOutputFileIdx']) + '.xml';
+    expFile = codecs.open(gVal['outputFileName'], 'w', 'utf-8');
     if expFile:
-        logging.info('Created export WXR file: %s', gVal['exportFileName']);
+        logging.info('Created export WXR file: %s', gVal['outputFileName']);
         expFile.close();
+        
+        # update
+        gVal['curOutputFileIdx'] += 1;
+        logging.debug("gVal['curOutputFileIdx']=%d", gVal['curOutputFileIdx']);
     else:
-        logging.error("Can not open writable exported WXR file: %s", gVal['exportFileName']);
+        logging.error("Can not open writable exported WXR file: %s", gVal['outputFileName']);
         sys.exit(2);
     return;
 
@@ -409,12 +456,6 @@ def processPhotos(blogContent):
     return blogContent;
 
 #------------------------------------------------------------------------------
-# if input string include '%', should be converted into '%25', 25=0x25=37=ascii value for '%'
-def convertToWpAddress(inputStr) :
-    strInWpAddr = re.compile('%').sub('%25', inputStr);
-    return strInWpAddr;
-
-#------------------------------------------------------------------------------
 # post process blog content:
 # 1. download pic and replace pic url
 # 2. remove invalid ascii control char
@@ -436,6 +477,16 @@ def postProcessContent(blogContent) :
     return processedContent;
 
 #------------------------------------------------------------------------------
+# calc the bytes/size of utf-8 string of input unicode
+def utf8Bytes(unicodeVal) :
+    if (unicodeVal):
+        utf8Val = unicodeVal.encode("utf-8");
+        bytes = len(utf8Val);
+    else:
+        bytes = 0;
+    return bytes;
+
+#------------------------------------------------------------------------------
 # process each feteched post info
 def processSinglePost(infoDict) :
     # remove the control char in title:
@@ -448,20 +499,101 @@ def processSinglePost(infoDict) :
     # too many translate request to google will cause "HTTPError: HTTP Error 502: Bad Gateway"
     infoDict['titleForPublish'] = generatePostName(infoDict['title']);
 
-    if(not (infoDict['category'] in gVal['catNiceDict'])):
-        gVal['catNiceDict'][infoDict['category']] = generatePostName(infoDict['category']);
-
-    # add into global tagSlugDict
-    # note: input tags should be unicode type
-    if(infoDict['tags']) :
-        for eachTag in infoDict['tags'] :
-            if eachTag : # maybe is u'', so here should check whether is empty
-                gVal['tagSlugDict'][eachTag] = generatePostName(eachTag);
-                
     if(gCfg['processType'] == "exportToWxr") :    
         # do some post process for blog content
         infoDict['content'] = postProcessContent(infoDict['content']);
+
+        # export single post item if necessary
+        #--------------------------- start --------------------------------
+        crifanLib.calcTimeStart("export_posts");
+
+        # generate (unicode) strings
+        category = infoDict['category'];
+        if(not (category in gVal['catNiceDict'])):
+            curCatNice = generatePostName(category);
+            gVal['curItem']['catNiceDict'][category] = curCatNice;
+            # also add to global dict
+            gVal['catNiceDict'][category] = curCatNice;
+
+            gVal['nextCatId'] = 1;
+            newCategoriesUni = generateCategories(gVal['catNiceDict']);
+        else:
+            gVal['curItem']['catNiceDict'][category] = gVal['catNiceDict'][category];
+            newCategoriesUni = gVal['categoriesUni'];
+
+        # add into global tagSlugDict
+        # note: input tags should be unicode type
+        if(infoDict['tags']) :
+            for eachTag in infoDict['tags'] :
+                if eachTag : # maybe is u'', so here should check whether is empty
+                    if(eachTag in gVal['tagSlugDict']):
+                        gVal['curItem']['tagSlugDict'][eachTag] = gVal['tagSlugDict'][eachTag];
+                    else :
+                        curTagSlug = generatePostName(eachTag);
+                        gVal['curItem']['tagSlugDict'][eachTag] = curTagSlug;
+                        gVal['tagSlugDict'][eachTag] = curTagSlug;
+
+        if(gVal['curItem']['tagSlugDict']) :
+            newTagsUni = generateTags(gVal['tagSlugDict']);
+        else:
+            newTagsUni = gVal['tagsUni'];
+
+        itemUni = generateSingleItem(infoDict);
+        newItemsUni = gVal['itemsUni'] + itemUni;
+
+        newGeneratedUni  = gVal['wxrHeaderUni']  + newCategoriesUni  + newTagsUni  + gVal['generatorUni']  + newItemsUni  + gVal['tailUni'];
+        newGeneratedSize = utf8Bytes(newGeneratedUni);
         
+        logging.debug("newGeneratedSize=%d", newGeneratedSize);
+        # check whether size exceed limit
+        # Note: 0 means no limit
+        if gCfg['maxXmlSize'] and (newGeneratedSize > gCfg['maxXmlSize']) : # if exceed limit
+            # create file for output
+            createNewOutputFile();
+            
+            #write processed ones
+            newFile = openOutputFile();
+            newFile.write(gVal['curGeneratedUni']);
+            newFile.flush();
+            newFile.close();
+            
+            # update something
+            gVal['nextCatId'] = 1;
+            itemCategoriyUni = generateCategories(gVal['curItem']['catNiceDict']);
+            gVal['categoriesUni'] = itemCategoriyUni;
+            
+            if(gVal['curItem']['tagSlugDict']) :
+                itemTagsUni = generateTags(gVal['curItem']['tagSlugDict']);
+            else:
+                itemTagsUni = "";
+            gVal['tagsUni'] = itemTagsUni;
+
+            gVal['itemsUni'] = itemUni;
+            
+            # reset something
+            gVal['tagSlugDict'] = {};
+            gVal['catNiceDict'] = {};
+
+        else : # if not exceed limit:
+            # update something
+            gVal['categoriesUni'] = newCategoriesUni;
+            gVal['tagsUni'] = newTagsUni;
+            gVal['itemsUni'] = newItemsUni;
+
+        # update something
+        gVal['curGeneratedUni']  = gVal['wxrHeaderUni']  + gVal['categoriesUni']  + gVal['tagsUni']  + gVal['generatorUni']  + gVal['itemsUni']  + gVal['tailUni'];
+        gVal['curGeneratedSize'] = utf8Bytes(gVal['curGeneratedUni']);
+        logging.debug("after process post, gVal['curGeneratedSize']=%d", gVal['curGeneratedSize']);
+        
+        # clear something
+        gVal['curItem']['catNiceDict'] = {};
+        gVal['curItem']['tagSlugDict'] = {};
+    
+        gVal['statInfoDict']['exportPostsTime'] += crifanLib.calcTimeEnd("export_posts");
+        logging.debug("gVal['statInfoDict']['exportPostsTime']=%f", gVal['statInfoDict']['exportPostsTime']);
+        
+        #--------------------------- end --------------------------------
+
     elif (gCfg['processType'] == "modifyPost") :
         # 1. prepare new content
         newPostContentUni = gVal['postModifyPattern'];
@@ -664,28 +796,31 @@ def removeInvalidCharInUrl(inputString):
     return filterd_str;
 
 #------------------------------------------------------------------------------
-def exportHead(dic):
-    global gConst
-    global gVal
+def generateHeader():
+    global gConst;
+    global gVal;
 
-    wxrT = Template("""<?xml version="1.0" encoding="UTF-8"?>
+    #get blog header info
+    blogInfoDict = {};
+    getBlogHeadInfo(blogInfoDict);
+    
+    wxrHeaderT = Template(u"""<?xml version="1.0" encoding="UTF-8"?>
 <!--
     This is a WordPress eXtended RSS file generated by ${generator} as an export of 
-    your blog. It contains information about your blog's posts, comments, and 
-    categories. You may use this file to transfer that content from one site to 
-    another. This file is not intended to serve as a complete backup of your 
-    blog.
+    your blog. It contains information about your blog's title and description, 
+    and each post's title, tags, categories, content, publish time and comments.
+    You may use this file to transfer that content from one site to another. 
+    This file can be served as a complete backup of your blog.
     
     To import this information into a WordPress blog follow these steps:
-    
-    1.    Log into that blog as an administrator.
-    2.    Go to Manage > Import in the blog's admin.
-    3.    Choose "WordPress" from the list of importers.
-    4.    Upload this file using the form provided on that page.
-    5.    You will first be asked to map the authors in this export file to users 
+    1.  Log into your blog as an administrator.
+    2.  Go to Manage > Import in the blog's admin.
+    3.  Choose "WordPress" from the list of importers.
+    4.  Upload this file using the form provided on that page.
+    5.  You will first be asked to map the authors in this export file to users 
         on the blog. For each author, you may choose to map an existing user on 
         the blog or to create a new user.
-    6.    WordPress will then import each of the posts, comments, and categories 
+    6.  WordPress will then import each of the posts' info
         contained in this file onto your blog.
 -->
 
@@ -722,15 +857,95 @@ def exportHead(dic):
 #need   nowTime, blogTitle, blogDiscription, blogUser, generator
 #       authorDisplayName, authorFirstName, authorLastName, blogPubDate
 
+    # Note: some field value has been set before call this func
+    blogInfoDict['authorDisplayName'] = packageCDATA("");
+    blogInfoDict['authorFirstName'] = packageCDATA("");
+    blogInfoDict['authorLastName'] = packageCDATA("");
+    blogInfoDict['blogTitle'] = saxutils.escape(blogInfoDict['blogTitle']);
+    blogInfoDict['blogDiscription'] = saxutils.escape(blogInfoDict['blogDiscription']);
+    blogInfoDict['generator'] = gConst['generator'];
+    wxrHeaderUni = wxrHeaderT.substitute(blogInfoDict);
+    
+    gVal['wxrHeaderUni'] = wxrHeaderUni;
+    wxrHeaderUtf8 = wxrHeaderUni.encode("utf-8");
+    wxrHeaderSize=len(wxrHeaderUtf8);
+
+    gVal['wxrHeaderUni'] = wxrHeaderUni;
+    gVal['wxrHeaderSize'] = wxrHeaderSize;
+    
+    logging.info("generate wxr header OK");
+
+    return ;
+
+#------------------------------------------------------------------------------
+def generateGenerator():
+    global gConst
+
+    generatorT = Template(u"""
+    <generator>${generator}</generator>
+
+""")#need generator
+
+    generatorUni = generatorT.substitute(generator = gConst['generator']);
+    
+    gVal['generatorUni'] = generatorUni;
+    generatorUtf8 = generatorUni.encode("utf-8");
+    generatorSize = len(generatorUtf8);
+    
+    gVal['generatorUni'] = generatorUni;
+    gVal['generatorSize'] = generatorSize;
+    
+    logging.info("generate generator OK");
+
+    return ;
+
+#------------------------------------------------------------------------------
+def generateTail():
+    global gVal;
+    
+    tailUni = gConst['tailUni'];
+    tailUtf8 = tailUni.encode("utf-8");
+    tailSize = len(tailUtf8);
+
+    gVal['tailUni'] = tailUni;
+    gVal['tailSize'] = tailSize;
+    
+    logging.info("generate tail OK");
+
+    return;
+
+#------------------------------------------------------------------------------
+def generateCategories(catNiceDict):
+    global gVal
+
     catT = Template("""
     <wp:category>
-        <wp:term_id>${catTermId}</wp:term_id>
+        <wp:term_id>${categoryId}</wp:term_id>
         <wp:category_nicename>${catNicename}</wp:category_nicename>
         <wp:category_parent></wp:category_parent>
         <wp:cat_name>${catName}</wp:cat_name>
         <wp:category_description>${catDesc}</wp:category_description>
     </wp:category>
-""")#need catTermId, catName, catNicename, catDesc
+""")#need categoryId, catName, catNicename, catDesc
+
+    categoriesUni = '';
+    categoryId = gVal['nextCatId'];
+    for cat in catNiceDict.keys():
+        categoriesUni += catT.substitute(
+            categoryId = categoryId,
+            catName = packageCDATA(cat),
+            catNicename = catNiceDict[cat],
+            catDesc = packageCDATA(""),);
+        categoryId += 1;
+    
+    gVal['nextCatId'] = categoryId;
+    gVal['nextTagId'] = gVal['nextCatId'];
+
+    return categoriesUni;
+
+#------------------------------------------------------------------------------
+def generateTags(tagSlugDict):
+    global gVal
 
     tagT = Template("""
     <wp:tag>
@@ -745,69 +960,43 @@ def exportHead(dic):
 
 """)#need generator
 
-    # Note: some field value has been set before call this func
-    dic['authorDisplayName'] = packageCDATA("");
-    dic['authorFirstName'] = packageCDATA("");
-    dic['authorLastName'] = packageCDATA("");
-    dic['blogTitle'] = saxutils.escape(dic['blogTitle']);
-    dic['blogDiscription'] = saxutils.escape(dic['blogDiscription']);
-    dic['generator'] = gConst['generator'];
-    headerStr = wxrT.substitute(dic);
-
-    catStr = '';
-    catTermID = 1;
-    for cat in gVal['catNiceDict'].keys():
-        catStr += catT.substitute(
-            catTermId = catTermID,
-            catName = packageCDATA(cat),
-            catNicename = gVal['catNiceDict'][cat],
-            catDesc = packageCDATA(""),);
-        catTermID += 1;
-
     #compose tags string
-    tagsStr = '';
-    tagTermID = catTermID;
-    for tag in gVal['tagSlugDict'].keys():
+    tagsUni = '';
+    tagTermID = gVal['nextTagId'];
+    for tag in tagSlugDict.keys():
         if tag :
-            tagsStr += tagT.substitute(
+            tagsUni += tagT.substitute(
                 tagNum = tagTermID,
-                tagSlug = gVal['tagSlugDict'][tag],
+                tagSlug = tagSlugDict[tag],
                 tagName = packageCDATA(tag),);
             tagTermID += 1;
 
-    generatorStr = generatorT.substitute(generator = gConst['generator']);
+    return tagsUni;
 
-    expFile = openExportFile();
-    gVal['fullHeadInfo'] = headerStr + catStr + tagsStr + generatorStr;
-    expFile.write(gVal['fullHeadInfo']);
-    expFile.flush();
-    expFile.close();
-    return;
 
 #------------------------------------------------------------------------------
-# export each post info, then add foot info
-# if exceed max size, then split it
-def exportPost(entry, user):
+# generate single item (unicode) string
+def generateSingleItem(itemDict):
     global gVal;
     global gCfg;
 
     itemT = Template("""
     <item>
-        <title>${entryTitle}</title>
+        <title>${itemTitle}</title>
         <!--${originalLink}-->
-        <link>${entryURL}</link>
+        <link>${itemUrl}</link>
         <pubDate>${pubDate}</pubDate>
-        <dc:creator>${entryAuthor}</dc:creator>
-        <guid isPermaLink="false">${entryURL}</guid>
+        <dc:creator>${itemAuthor}</dc:creator>
+        <guid isPermaLink="false">${itemUrl}</guid>
         <description></description>
-        <content:encoded>${entryContent}</content:encoded>
-        <excerpt:encoded>${entryExcerpt}</excerpt:encoded>
+        <content:encoded>${itemContent}</content:encoded>
+        <excerpt:encoded>${itemExcerpt}</excerpt:encoded>
         <wp:post_id>${postId}</wp:post_id>
         <wp:post_date>${postDate}</wp:post_date>
         <wp:post_date_gmt>${postDateGMT}</wp:post_date_gmt>
         <wp:comment_status>open</wp:comment_status>
         <wp:ping_status>open</wp:ping_status>
-        <wp:post_name>${entryPostName}</wp:post_name>
+        <wp:post_name>${itemPostName}</wp:post_name>
         <wp:status>${postStatus}</wp:status>
         <wp:post_parent>0</wp:post_parent>
         <wp:menu_order>0</wp:menu_order>
@@ -818,8 +1007,8 @@ def exportPost(entry, user):
         ${tags}
         ${comments}
     </item>
-"""); #need entryTitle, entryURL, entryAuthor, category, entryContent,
-# entryExcerpt, postId, postDate, entryPostName, postStatus
+"""); #need itemTitle, itemUrl, itemAuthor, category, itemContent,
+# itemExcerpt, postId, postDate, itemPostName, postStatus
 # originalLink
 
     tagsT = Template("""
@@ -844,25 +1033,25 @@ def exportPost(entry, user):
      # commentDateGMT, commentContent, commentAuthorIP, commentParent
 
     #compose tags string
-    tagsStr = '';
-    for tag in entry['tags']:
+    itemTagsUni = '';
+    for tag in itemDict['tags']:
         if tag:
-            tagsStr += tagsT.substitute(
-                tagSlug = gVal['tagSlugDict'][tag],
+            itemTagsUni += tagsT.substitute(
+                tagSlug = gVal['curItem']['tagSlugDict'][tag],
                 tagName = packageCDATA(tag),);
 
     #compose comment string
-    commentsStr = "";
-    logging.debug("Now will export comments = %d", len(entry['comments']));
+    itemCommentsUni = "";
+    logging.debug("Now will export comments = %d", len(itemDict['comments']));
     
     # for output info use
     maxNumReportOnce = 500;
     lastRepTime = 0;
     
-    for curCmtNum, comment in enumerate(entry['comments']):
+    for curCmtNum, comment in enumerate(itemDict['comments']):
         cmtContentNoCtrlChr = crifanLib.removeCtlChr(comment['content']);
         authorNoCtrlChr = crifanLib.removeCtlChr(comment['author']);
-        commentsStr += commentT.substitute(
+        itemCommentsUni += commentT.substitute(
                             commentId = comment['id'],
                             commentAuthor = packageCDATA(authorNoCtrlChr),
                             commentEmail = comment['author_email'],
@@ -881,91 +1070,36 @@ def exportPost(entry, user):
             lastRepTime = curRepTime;             
 
     # parse datetime string into local time
-    parsedLocalTime = parseDatetimeStrToLocalTime(entry['datetime']);
+    parsedLocalTime = parseDatetimeStrToLocalTime(itemDict['datetime']);
     gmtTime = crifanLib.convertLocalToGmt(parsedLocalTime);
-    entry['pubDate'] = gmtTime.strftime('%a, %d %b %Y %H:%M:%S +0000');
-    entry['postDate'] = parsedLocalTime.strftime('%Y-%m-%d %H:%M:%S');
-    entry['postDateGMT'] = gmtTime.strftime('%Y-%m-%d %H:%M:%S');
+    itemDict['pubDate'] = gmtTime.strftime('%a, %d %b %Y %H:%M:%S +0000');
+    itemDict['postDate'] = parsedLocalTime.strftime('%Y-%m-%d %H:%M:%S');
+    itemDict['postDateGMT'] = gmtTime.strftime('%Y-%m-%d %H:%M:%S');
     
-    itemStr = itemT.substitute(
-        entryTitle = entry['title'],
-        originalLink = entry['url'],
-        entryURL = gCfg['postPrefAddr'] + str(entry['postid']),
-        entryAuthor = user,
-        category = packageCDATA(entry['category']),
-        category_nicename = gVal['catNiceDict'][entry['category']],
-        entryContent = entry['content'],
-        entryExcerpt = packageCDATA(""),
-        postId = entry['postid'],
-        postDate = entry['postDate'],
-        postDateGMT = entry['postDateGMT'],
-        pubDate = entry['pubDate'],
-        entryPostName = entry['titleForPublish'],
-        tags = tagsStr,
-        comments = commentsStr,
-        postStatus = entry['type'],
+    itemUni = itemT.substitute(
+        itemTitle = itemDict['title'],
+        originalLink = itemDict['url'],
+        itemUrl = gCfg['postPrefAddr'] + str(itemDict['postid']),
+        itemAuthor = gVal['wxrValidUsername'],
+        category = packageCDATA(itemDict['category']),
+        category_nicename = gVal['curItem']['catNiceDict'][itemDict['category']],
+        itemContent = itemDict['content'],
+        itemExcerpt = packageCDATA(""),
+        postId = itemDict['postid'],
+        postDate = itemDict['postDate'],
+        postDateGMT = itemDict['postDateGMT'],
+        pubDate = itemDict['pubDate'],
+        itemPostName = itemDict['titleForPublish'],
+        tags = itemTagsUni,
+        comments = itemCommentsUni,
+        postStatus = itemDict['type'],
         );
 
-    # output item info to file
-    curFileSize = os.path.getsize(gVal['exportFileName']);
-    itemStrUft8 = itemStr.encode("utf-8");
-    newFileSize = curFileSize + len(itemStrUft8);
-    #logging.debug("itemPostId[%04d]: unicode str size = %d, utf-8 str size=%d", entry['postid'], len(itemStr), len(itemStrUft8))
-    
-    if gCfg['maxXmlSize'] and (newFileSize > gCfg['maxXmlSize']) : # exceed limit size, 0 means no limit
-        # 1. output tail info
-        curFile = openExportFile();
-        curFile.write(gConst['tailInfo']);
-
-        # 2. close old file
-        curFile.flush();
-        curFile.close();
-        #logging.debug("Stored %s size = %d", gVal['exportFileName'], os.path.getsize(gVal['exportFileName']))
-
-        # 3. generate new name
-        # old: XXX_20111218_2213-0.xml
-        # new: XXX_20111218_2213-1.xml
-        oldIdx = int(gVal['exportFileName'][-5]);
-        newIdx = oldIdx + 1;
-        newFileName = gVal['exportFileName'][:-5] + str(newIdx) + ".xml";
-
-        # 4. update global export file name
-        gVal['exportFileName'] = newFileName;
-
-        # 5. create new file
-        newFile = codecs.open(gVal['exportFileName'], 'w', 'utf-8');
-        if newFile:
-            logging.info('Newly created export XML file: %s', gVal['exportFileName']);
-        else:
-            logging.error("Can not create new export file: %s",gVal['exportFileName']);
-            sys.exit(2);
-
-        # 6. export head info
-        newFile.write(gVal['fullHeadInfo']);
-        
-        # 7. export current item info
-        newFile.write(itemStr);
-        newFile.flush();
-        newFile.close();
-    else : # not exceed limit size
-        curFile = openExportFile();
-        curFile.write(itemStr);
-        curFile.flush();
-        curFile.close();
-
-    logging.debug("Export blog item '%s' done", entry['title']);
-    return;
+    return itemUni;
 
 #------------------------------------------------------------------------------
-def exportFoot():
-    f = openExportFile();
-    f.write(gConst['tailInfo']);
-    f.close();
-    return;
-
-#------------------------------------------------------------------------------
-# process blog header related info
-def processBlogHeadInfo(blogInfoDic, username) :
+# get blog header related info
+def getBlogHeadInfo(blogInfoDic) :
     global gConst;
     global gVal;
 
@@ -980,8 +1114,11 @@ def processBlogHeadInfo(blogInfoDic, username) :
     if not blogInfoDic['blogDiscription'] :
         blogInfoDic['blogDiscription'] = 'NoBlogDescription';
     blogInfoDic['nowTime'] = datetime.now().strftime('%Y-%m-%d %H:%M');
-    blogInfoDic['blogUser'] = username;
+    blogInfoDic['blogUser'] = gVal['wxrValidUsername'];
     blogInfoDic['blogPubDate'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0000');
+
+    logging.info("get blog head info OK");
+
     return;
 
 #------------------------------------------------------------------------------
@@ -999,9 +1136,7 @@ def outputStatisticInfo() :
     processPostsTime = int(gVal['statInfoDict']['processPostsTime']);
     fetchPageTime = int(gVal['statInfoDict']['fetchPageTime']);
     if(gCfg['processType'] == "exportToWxr") :
-        exportHeadTime = int(gVal['statInfoDict']['exportHeadTime']);
         exportPostsTime = int(gVal['statInfoDict']['exportPostsTime']);
-        exportFootTime = int(gVal['statInfoDict']['exportFootTime']);
         if gCfg['processPic'] == 'yes' :
             processPicTime = int(gVal['statInfoDict']['processPicTime']);
         if gCfg['processCmt'] == 'yes' :
@@ -1015,16 +1150,13 @@ def outputStatisticInfo() :
     logging.info("  Process Post: %s", toHourMinuteSecondStr(processPostsTime));
     logging.info("      Fetch   Pages     : %s", toHourMinuteSecondStr(fetchPageTime));
     if(gCfg['processType'] == "exportToWxr") :
+        logging.info("      Export  Posts     : %s", toHourMinuteSecondStr(exportPostsTime));
         if gCfg['processPic'] == 'yes' :
             logging.info("      Process Pictures  : %s", toHourMinuteSecondStr(processPicTime));
         if gCfg['processCmt'] == 'yes' :
             logging.info("      Process Comments  : %s", toHourMinuteSecondStr(processCmtTime));
     if gCfg['googleTrans'] == 'yes' :
         logging.info("      Translate Name    : %s", toHourMinuteSecondStr(transNameTime));
-    if(gCfg['processType'] == "exportToWxr") :
-        logging.info("  Export Head : %s", toHourMinuteSecondStr(exportHeadTime));
-        logging.info("  Export Posts: %s", toHourMinuteSecondStr(exportPostsTime));
-        logging.info("  Export Foot : %s", toHourMinuteSecondStr(exportFootTime));
 
     return;
 
@@ -1103,10 +1235,7 @@ def initialization(inputUrl):
     if(gCfg['processType'] == "exportToWxr") : 
         # update some related default value
         if gCfg['picPathInWP'] == '' :
-            # % -> %25
-            # eg: %D7%CA%C1%CF%CA%D5%BC%AF -> %25D7%25CA%25C1%25CF%25CA%25D5%25BC%25AF
-            blogUsrInWpAddr = convertToWpAddress(gVal['blogUser']);
-            gCfg['picPathInWP'] = gConst['picRootPathInWP'] + '/' + blogUsrInWpAddr + "/pic";
+            gCfg['picPathInWP'] = gConst['picRootPathInWP'];
         if gCfg['otherPicPathInWP'] == '' :
             gCfg['otherPicPathInWP'] = gCfg['picPathInWP'] + '/' + gConst['othersiteDirName'];
 
@@ -1117,6 +1246,21 @@ def initialization(inputUrl):
     tryLoginBlog();
     
     return;
+
+#------------------------------------------------------------------------------
+# generate the WXR valid username
+def generateWxrValidUsername():
+    # make sure the username is valid in WXR: not contains non-word(non-char and number, such as '@', '_') character
+    gVal['wxrValidUsername'] = crifanLib.removeNonWordChar(gVal['blogUser']);
+    
+    # Note:
+    # now have found a bug for wordpress importer:
+    # if usename in WXR contains underscore, then after imported, that post's username will be omitted, become to default's admin's username
+    # eg: if username is green_waste, which is valid, can be recoginzed by wordpress importer, 
+    # then after imported posts into wordpress, the username of posts imported become to default admin(here is crifan), not we expected : green_waste
+    # so here replace the underscore to ''
+    gVal['wxrValidUsername'] = gVal['wxrValidUsername'].replace("_", "");
+    logging.info("Generated WXR safe username is %s", gVal['wxrValidUsername']);
 
 #------------------------------------------------------------------------------
 def main():
@@ -1154,7 +1298,7 @@ def main():
     logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
-        
+    
     (options, args) = parser.parse_args();
     # 1. export all options variables
     for i in dir(options):
@@ -1222,6 +1366,7 @@ def main():
     if(gCfg['processType'] == "exportToWxr") :
         gVal['statInfoDict']['processPicTime']  = 0.0;
         gVal['statInfoDict']['processCmtTime']  = 0.0;
+        gVal['statInfoDict']['exportPostsTime'] = 0.0;
 
     gVal['statInfoDict']['processedPostNum'] = 0; # also include that is omited
     gVal['statInfoDict']['transNameTime']   = 0.0;
@@ -1258,6 +1403,28 @@ def main():
     # 4. main loop, fetch and process for every post
     crifanLib.calcTimeStart("process_posts");
     
+    #initialize for export post
+    if(gCfg['processType'] == "exportToWxr") :
+        initForOutputFile();
+        
+        generateWxrValidUsername();
+
+        # generate wxr header info
+        logging.info("Generating wxr head info ...");
+        generateHeader();
+        
+        # generate generator info
+        logging.info("Generating generator info ...");
+        generateGenerator();
+        
+        # generate tail info
+        logging.info("Generating tail info ...");
+        generateTail();
+        
+        # init for current generated
+        gVal['curGeneratedUni']  = gVal['wxrHeaderUni']  + gVal['categoriesUni']  + gVal['tagsUni']  + gVal['generatorUni']  + gVal['itemsUni']  + gVal['tailUni'];
+        gVal['curGeneratedSize'] = utf8Bytes(gVal['curGeneratedUni']);
+
     while permalink:
         infoDict = fetchSinglePost(permalink);
        
@@ -1278,51 +1445,16 @@ def main():
 
     gVal['statInfoDict']['processPostsTime'] = crifanLib.calcTimeEnd("process_posts");
 
-    if(gCfg['processType'] == "exportToWxr") :
-    
-        # 5. output extracted info to XML file
-        createOutputFile();
-
-        # make sure the username is valid in WXR: not contains non-word(non-char and number, such as '@', '_') character
-        wxrValidUsername = crifanLib.removeNonWordChar(gVal['blogUser']);
-        
-        # Note:
-        # now have found a bug for wordpress importer:
-        # if usename in WXR contains underscore, then after imported, that post's username will be omitted, become to default's admin's username
-        # eg: if username is green_waste, which is valid, can be recoginzed by wordpress importer, 
-        # then after imported posts into wordpress, the username of posts imported become to default admin(here is crifan), not we expected : green_waste
-        # so here replace the underscore to ''
-        wxrValidUsername = wxrValidUsername.replace("_", "");
-        logging.info("Generated WXR safe username is %s", wxrValidUsername);
-
-        #get blog header info
-        blogInfoDic = {};
-        #processBlogHeadInfo(blogInfoDic, gVal['blogUser']);
-        processBlogHeadInfo(blogInfoDic, wxrValidUsername);
-
-        # export blog header info
-        logging.info('Exporting head info to file ...');
-        crifanLib.calcTimeStart("export_head");
-        exportHead(blogInfoDic);
-        gVal['statInfoDict']['exportHeadTime'] = crifanLib.calcTimeEnd("export_head");
-
-        # export entries
-        logging.info('Exporting post items info to file ...');
+    if(gCfg['processType'] == "exportToWxr") : 
+        logging.info('Exporting items at last ...');
         crifanLib.calcTimeStart("export_posts");
-        exportedNum = 0;
-        for entry in gVal['postList']:
-            exportedNum += 1;
-            #exportPost(entry, gVal['blogUser']);
-            exportPost(entry, wxrValidUsername);
-            if (exportedNum % 10) == 0 :
-                logging.info("Has exported %4d blog items", exportedNum);
-        gVal['statInfoDict']['exportPostsTime'] = crifanLib.calcTimeEnd("export_posts");
-
-        # export Foot
-        logging.info('Exporting tail info to file ...');
-        crifanLib.calcTimeStart("export_foot");
-        exportFoot();
-        gVal['statInfoDict']['exportFootTime'] = crifanLib.calcTimeEnd("export_foot");
+        # output in then end always
+        createNewOutputFile();
+        newFile = openOutputFile();
+        newFile.write(gVal['curGeneratedUni']);
+        newFile.flush();
+        newFile.close();
+        gVal['statInfoDict']['exportPostsTime'] += crifanLib.calcTimeEnd("export_posts");
 
     logging.info("Process blog %s successfully", gVal['blogEntryUrl']);
 
