@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v9.1
+版本：     v9.2
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -21,6 +21,9 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v9.2]
+1.support modify 163 post via manually input verify code.
+
 [v9.1]
 1.export WXR during processing => whole process speed become a little bit faster !
 2.change default pic prefix path to http://localhost/wp-content/uploads/pic
@@ -80,7 +83,7 @@ import BlogSohu;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v9.1";
+__VERSION__ = "v9.2";
 
 gConst = {
     'generator'         : "http://www.crifan.com",

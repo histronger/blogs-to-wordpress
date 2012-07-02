@@ -14,6 +14,9 @@ crifan's common functions, implemented by Python.
 1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v1.9]
+1.add randDigitsStr
+
 [v1.8]
 1.bugfix-> isFileValid support unquoted & lower for compare filename
 
@@ -51,12 +54,14 @@ import logging;
 import struct;
 import zlib;
 
+import random;
+
 # from PIL import Image;
 # from operator import itemgetter;
 
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.8";
+__VERSION__ = "v1.9";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -145,6 +150,34 @@ def convertLocalToGmt(localTime) :
 ################################################################################
 # String
 ################################################################################
+
+#------------------------------------------------------------------------------
+# generated the random digits number string
+# max digit number is 12
+def randDigitsStr(digitNum = 12) :
+    if(digitNum > 12):
+        digitNum = 12;
+
+    randVal = random.random();
+    #print "randVal=",randVal; #randVal= 0.134248340235
+    randVal = str(randVal);
+    #print "randVal=",randVal; #randVal= 0.134248340235
+    
+    randVal = randVal.replace("0.", "");
+    #print "randVal=",randVal; #randVal= 0.134248340235
+    
+    # if last is 0, append that 0    
+    if(len(randVal)==11):
+        randVal = randVal + "0";
+    #print "randVal=",randVal; #randVal= 0.134248340235
+    
+    #randVal = randVal.replace("e+11", "");
+    #randVal = randVal.replace(".", "");
+    #print "randVal=",randVal; #randVal= 0.134248340235
+    randVal = randVal[0 : digitNum];
+    #print "randVal=",randVal; #randVal= 0.134248340235
+    
+    return randVal;
 
 #------------------------------------------------------------------------------
 # get supported picture suffix list

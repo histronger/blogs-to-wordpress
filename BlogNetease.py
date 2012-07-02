@@ -28,6 +28,10 @@ import crifanLib;
 import cookielib;
 from xml.sax import saxutils;
 
+#from PIL import Image;
+import StringIO;
+
+
 #--------------------------------const values-----------------------------------
 __VERSION__ = "v1.4";
 
@@ -40,6 +44,8 @@ gVal = {
     'blogUser'      : '',
     'blogEntryUrl'  : '',  # http://againinput4.blog.163.com
     'cj'            : None, # cookiejar, to store cookies for login mode
+    
+    'importedPil'   : False,
 }
 
 ################################################################################
@@ -1305,103 +1311,150 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
     foundCaptcha = re.search(r"location\.vcd\s+?=\s+?'(?P<captchaUrl>.+?)';", getBlogRespHtml);
     if(foundCaptcha) :
         captchaUrl = foundCaptcha.group("captchaUrl");
+        
+        # following is emulation of goto
+        retryNum = 5;
+        for tries in range(retryNum) :
+            logging.debug("begin do %d times verify code", tries);
+            # do what you want normally do here
+            
+            verifyCode = "";
+            
+            # process verify code == captcha
+            # url is:
+            #http://api.blog.163.com/cap/captcha.jpgx?parentId=172799491&r=581079
+            #captchaUrl = "http://api.blog.163.com/cap/captcha.jpgx";
+            #captchaUrl += "?parentId=" + parentId;
+                        
+            # add 6 digit random value
+            captchaUrl += str(crifanLib.randDigitsStr(6));
+            logging.debug("captchaUrl=%s", captchaUrl);
+            respHtml = crifanLib.getUrlRespHtml(captchaUrl);
+            
+            # captchaDir = "captcha";
+            # #captchaPicFile = "returned_captcha.jpg";
+            # captchaPicFile = datetime.now().strftime('%Y%m%d_%H%M%S') + "_captcha.jpg";
+            
+            # saveToFile = captchaDir + "/" + captchaPicFile;
+            # crifanLib.saveBinDataToFile(respHtml, saveToFile);
+            # print "save verify code pic OK, saveToFile=",saveToFile;
+            
+            # openedImg = Image.open(saveToFile);
+            # print "openedImg=",openedImg;
+            # openedImg.show();
+            # print "openedImg OK";
+            
+            #jpgData = respHtml;
+            #newImg = Image.new("RGB", (60,24));
+            #img = newImg.fromstring(jpgData);
+            #img.show();
+            
+            if(gVal['importedPil'] == False):
+                logging.debug("now will import PIL module");
+                from PIL import Image;
+                logging.debug("import PIL module OK");
+                gVal['importedPil'] = True;
+            img = Image.open(StringIO.StringIO(respHtml));
+            # 如果看不到图片，请参考：
+            #【已解决】Python中通过Image的open之后，去show结果打不开bmp图片，无法正常显示图片
+            #http://www.crifan.com/python_image_show_can_not_open_bmp_image_file/
+            img.show();
+            
+            hintStr = unicode("请输入所看到的(4个字母的)验证码：", "utf-8");
+            verifyCode = raw_input(hintStr.encode("GB18030"));
+            #logging.info(u"您所输入的验证码为：%s", verifyCode);
+                        
+            # captchaCode = crifanLib.parseCaptchaFromPicFile(saveToFile);
+            # print "captchaCode=",captchaCode;
+            
+            # cccccccccccc
+            
+            # now to modify post
 
-        # process verify code == captcha
-        # url is:
-        #http://api.blog.163.com/cap/captcha.jpgx?parentId=172799491&r=581079
-        #captchaUrl = "http://api.blog.163.com/cap/captcha.jpgx";
-        #captchaUrl += "?parentId=" + parentId;
-        
-        captchaUrl += "581079"
-        # print "captchaUrl=",captchaUrl;
-        # respHtml = crifanLib.getUrlRespHtml(captchaUrl);
-        
-        # captchaDir = "captcha";
-        # #captchaPicFile = "returned_captcha.jpg";
-        # captchaPicFile = datetime.now().strftime('%Y%m%d_%H%M%S') + "_captcha.jpg";
-        
-        # saveToFile = captchaDir + "/" + captchaPicFile;
-        # crifanLib.saveBinDataToFile(respHtml, saveToFile);
-        # print "save verify code pic OK";
-        
-        # captchaCode = crifanLib.parseCaptchaFromPicFile(saveToFile);
-        # print "captchaCode=",captchaCode;
-        
-        # cccccccccccc
-    
-    # now to modify post
+            #http://api.blog.163.com/againinput4/editBlogNew.do?p=1&n=0
+            modifyPostUrl = "http://api.blog.163.com/" + gVal['blogUser'] + "/editBlogNew.do?p=1&n=0";
+            logging.debug("modifyPostUrl=%s", modifyPostUrl);
+            
+            validCharsetForSubmit = "UTF-8"; # if here use "GB18030" -> after submit, the chinese char is messy code !!!
+            newPostContentGb18030 = newPostContentUni.encode(validCharsetForSubmit);
+            titleGb18030 = title.encode(validCharsetForSubmit);
 
-    #http://api.blog.163.com/againinput4/editBlogNew.do?p=1&n=0
-    modifyPostUrl = "http://api.blog.163.com/" + gVal['blogUser'] + "/editBlogNew.do?p=1&n=0";
-    logging.debug("modifyPostUrl=%s", modifyPostUrl);
-    
-    validCharsetForSubmit = "UTF-8"; # if here use "GB18030" -> after submit, the chinese char is messy code !!!
-    newPostContentGb18030 = newPostContentUni.encode(validCharsetForSubmit);
-    titleGb18030 = title.encode(validCharsetForSubmit);
+            postDict = {
+                "tag"           : "", #should find original blog tags,
+                "cls"           : classId, # 新的分类 的 id, fks_084066086082085064082082085095085081083068093095082074085
+                "allowview"     : "-100",
+                "refurl"        : "",
+                "abstract"      : "",
+                "bid"           : bid, #fks_081075087094087074084084086095085081083068093095082074085
+                "origClassId"   : classId, # 原先的分类的id
+                "origPublishState": "1",
+                "oldtitle"      : titleGb18030, #test%E6%9B%B4%E6%96%B0%E5%B8%96%E5%AD%90%E6%B5%8B%E8%AF%952
+                "todayPublishedCount": "0",
+                #"todayPublishedCount": "1",
+                "NETEASE_BLOG_TOKEN_EDITBLOG" : editBlogToken, #e6a5766d73b0daf359a37e9361e11e46
+                "title"         : titleGb18030,
+                "HEContent"     : newPostContentGb18030,
+                "copyPhotos"    : "",
+                "suggestedSortedIds": "",
+                "suggestedRecomCnt": "",
+                "suggestedStyle": "0",
+                "isSuggestedEachOther": "0",
+                "photoBookImgUrl": "",
+                "miniBlogCard"  : "0",
+                'valcodeKey'    : verifyCode,
+                "p"             : "1",
+            };
+            
+            resp = crifanLib.getUrlResponse(modifyPostUrl, postDict);
+            
+            #soup = BeautifulSoup(resp, fromEncoding="GB18030");
+            #prettifiedSoup = soup.prettify();
+            #logging.debug("Modify blog url resp json\n---------------\n%s", prettifiedSoup);
+            modifyPostRespHtml = crifanLib.getUrlRespHtml(modifyPostUrl, postDict);
+            logging.debug("modify post response html=%s", modifyPostRespHtml);
+            
+            RET_OK              = "1";
+            RET_ERR_REFERER     = "-1";
+            RET_ERR_TOKEN       = "-2";
+            RET_ERR_VERIFY_CODE = "-3";
+            
+            #return json:
+            #modify OK:
+            #{r:1,id:’1067120792′,sfx:’blog/static/17279949120120102415384/’}
+            #modify fail when need captcha(verify code):
+            #{r:-3,id:'',sfx:'/'}
+            foundModifyResult = re.search(r"\{r:(?P<retVal>[\-\+\d]+?),id:'(?P<id>\d*?)',sfx:'(?P<sfx>.+?)'\}", modifyPostRespHtml);
+            if(foundModifyResult) :
+                retVal = foundModifyResult.group("retVal");
+                
+                if(retVal == RET_OK) :
+                    modifyOk = True;
+                elif(retVal == RET_ERR_VERIFY_CODE) :
+                    modifyOk = False;
+                    errInfo = u"验证码错误！"; # captcha
+                elif(retVal == RET_ERR_TOKEN) :
+                    modifyOk = False;
+                    errInfo = u"Token错误！";
+                elif(retVal == RET_ERR_REFERER) :
+                    modifyOk = False;
+                    errInfo = u"Referer错误！";
+                else:
+                    modifyOk = False;
+                    errInfo = u"暂时无法保存日志，请稍后再试！";
 
-    postDict = {
-        "tag"           : "", #should find original blog tags,
-        "cls"           : classId, # 新的分类 的 id, fks_084066086082085064082082085095085081083068093095082074085
-        "allowview"     : "-100",
-        "refurl"        : "",
-        "abstract"      : "",
-        "bid"           : bid, #fks_081075087094087074084084086095085081083068093095082074085
-        "origClassId"   : classId, # 原先的分类的id
-        "origPublishState": "1",
-        "oldtitle"      : titleGb18030, #test%E6%9B%B4%E6%96%B0%E5%B8%96%E5%AD%90%E6%B5%8B%E8%AF%952
-        "todayPublishedCount": "0",
-        #"todayPublishedCount": "1",
-        "NETEASE_BLOG_TOKEN_EDITBLOG" : editBlogToken, #e6a5766d73b0daf359a37e9361e11e46
-        "title"         : titleGb18030,
-        "HEContent"     : newPostContentGb18030,
-        "copyPhotos"    : "",
-        "suggestedSortedIds": "",
-        "suggestedRecomCnt": "",
-        "suggestedStyle": "0",
-        "isSuggestedEachOther": "0",
-        "photoBookImgUrl": "",
-        "miniBlogCard"  : "0",
-        "p"             : "1",
-    };
-    
-    resp = crifanLib.getUrlResponse(modifyPostUrl, postDict);
-    
-    #soup = BeautifulSoup(resp, fromEncoding="GB18030");
-    #prettifiedSoup = soup.prettify();
-    #logging.debug("Modify blog url resp json\n---------------\n%s", prettifiedSoup);
-    modifyPostRespHtml = crifanLib.getUrlRespHtml(modifyPostUrl, postDict);
-    logging.debug("modify post response html=%s", modifyPostRespHtml);
-    
-    #return json:
-    #modify OK:
-    #{r:1,id:’1067120792′,sfx:’blog/static/17279949120120102415384/’}
-    #modify fail when need captcha(verify code):
-    #{r:-3,id:'',sfx:'/'}
-    foundModifyResult = re.search(r"\{r:(?P<retVal>[\-\+\d]+?),id:'(?P<id>\d*?)',sfx:'(?P<sfx>.+?)'\}", modifyPostRespHtml);
-    if(foundModifyResult) :
-        retVal = foundModifyResult.group("retVal");
-        
-        if(retVal == "1") :
-            modifyOk = True;
-        elif(retVal == "-3") :
-            modifyOk = False;
-            errInfo = u"验证码错误！"; # captcha
-        elif(retVal == "-2") :
-            modifyOk = False;
-            errInfo = u"Token错误！";
-        elif(retVal == "-1") :
-            modifyOk = False;
-            errInfo = u"Referer错误！";
-        else:
-            modifyOk = False;
-            errInfo = u"暂时无法保存日志，请稍后再试！";
+                id = foundModifyResult.group("id");
+                
+                sfx = foundModifyResult.group("sfx");
+            else :
+                modifyOk = False;
+                errInfo = "Can't parse the returned result of modify post.";
 
-        id = foundModifyResult.group("id");
-        
-        sfx = foundModifyResult.group("sfx");
-    else :
-        modifyOk = False;
-        errInfo = "Can't parse the returned result of modify post.";
+            if(tries < (retryNum - 1)):
+                if(retVal == RET_ERR_VERIFY_CODE):
+                    logging.info("verify code fail, do %d retry", tries + 1)
+                    continue # do retry
+                else :
+                    break # quit here
 
     return (modifyOk, errInfo);
 
