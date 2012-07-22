@@ -1004,20 +1004,6 @@ def fetchAndParseComments(url, html):
     return parsedCommentsList;
 
 #------------------------------------------------------------------------------
-# generate the file name for other pic
-# depend on following picInfoDict definition
-def genNewOtherPicName(picInfoDict):
-    newOtherPicName = "";
-    
-    filename = picInfoDict['filename'];
-    fd1 = picInfoDict['fields']['fd1'];
-    fd2 = picInfoDict['fields']['fd2'];
-    
-    newOtherPicName = fd1 + '_' + fd2 + "_" + filename;
-
-    return newOtherPicName;
-
-#------------------------------------------------------------------------------
 # check whether is self blog pic
 # depend on following picInfoDict definition
 def isSelfBlogPic(picInfoDict):
@@ -1040,43 +1026,6 @@ def isSelfBlogPic(picInfoDict):
     logging.debug("isSelfBlogPic: %s", isSelfPic);
 
     return isSelfPic;
-    
-#------------------------------------------------------------------------------
-# get the found pic info after re.search
-# foundPic is MatchObject
-def getFoundPicInfo(foundPic):
-    # here should corresponding to singlePicUrlPat in processPicCfgDict
-    picUrl  = foundPic.group(0);
-    fd1     = foundPic.group("fd1"); # photo
-    fd2     = foundPic.group("fd2"); # pic / img
-    fd3     = foundPic.group("fd3"); # sohu/ pp
-    fd4     = foundPic.group("fd4"); #     / sohu
-    fd5     = foundPic.group("fd5"); #     / 
-    fd6     = foundPic.group("fd6"); #
-    filename= foundPic.group("filename");
-    suffix  = foundPic.group("suffix");
-    
-    picInfoDict = {
-        'isSupportedPic': False,
-        'picUrl'        : picUrl,
-        'filename'      : filename,
-        'suffix'        : suffix,
-        'fields'        : 
-            {
-                'fd1' : fd1,
-                'fd2' : fd2,
-                'fd3' : fd3,
-                'fd4' : fd4,
-                'fd5' : fd5,
-                'fd6' : fd6,
-            },
-    };
-    
-    if (suffix in crifanLib.getPicSufList()) :
-        picInfoDict['isSupportedPic'] = True;
-        logging.debug("%s is supported pic", picUrl);
-
-    return picInfoDict;
 
 #------------------------------------------------------------------------------
 def getProcessPhotoCfg():
@@ -1098,18 +1047,14 @@ def getProcessPhotoCfg():
     # possible othersite pic url:
     
     
-    picSufChars = crifanLib.getPicSufChars();
     processPicCfgDict = {
-        # here only extract last pic name contain: char,digit,-,_
-        #'allPicUrlPat'      : r'(?!src=")http://\w{1,20}\.\w{1,20}\.\w{1,10}[\.]?\w*/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
-        #'singlePicUrlPat'   : r'http://(?P<fd1>\w{1,20})\.(?P<fd2>\w{1,20})\.\w{1,10}[\.]?\w*/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
-
-        'allPicUrlPat'      : r'(?<=src=")http://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
-        'singlePicUrlPat'   : r'http://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
-
-        'getFoundPicInfo'       : getFoundPicInfo,
-        'isSelfBlogPic'         : isSelfBlogPic,
-        'genNewOtherPicName'    : genNewOtherPicName,
+        'allPicUrlPat'      : None,
+        'singlePicUrlPat'   : None,
+        'getFoundPicInfo'   : None,
+        'isSelfBlogPic'     : isSelfBlogPic,
+        'genNewOtherPicName': None,
+        'isFileValid'       : None,
+        'downloadFile'      : None,
     };
     
     return processPicCfgDict;

@@ -7,6 +7,9 @@ For BlogsToWordpress, this file contains the functions for QQ Space.
 [TODO]
 
 [History]
+v1.8
+1.fixbug -> after get valid info from getPostInfoDictFromBlogid, then quit
+
 v1.7:
 1.support this kind of pic:
 http://ctc.qzs.qq.com/qzone/space_item/orig/1/76673/module_1.jpg
@@ -34,7 +37,7 @@ import json; # New in version 2.6.
 import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.7";
+__VERSION__ = "v1.8";
 
 gConst = {
     'spaceDomain'  : 'http://user.qzone.qq.com',
@@ -530,8 +533,12 @@ def getPostWithinPeriod(startTime, endTime, postNumInMonth):
 
 #------------------------------------------------------------------------------
 # generate url of get real post info from post's blogid
-# eg: 1321000398 -> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=1083902439&blogid=1321000398&v6=1
+# eg:
+#(1)
+# 1321000398 -> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=1083902439&blogid=1321000398&v6=1
 # in which 1083902439 is blogUser
+# (2)http://user.qzone.qq.com/84483423/blog/1317915494
+# http://b1.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=84483423&blogid=1317915494&styledm=cnc.qzonestyle.gtimg.cn&imgdm=cnc.qzs.qq.com&bdm=b.cnc.qzone.qq.com&mode=2&numperpage=15&blogseed=0.796438868937457&property=GoRE&timestamp=1342501980&dprefix=cnc.&g_tk=5381&ref=qzone&v6=1
 def genGetPostInfoUrl(blogid, blogOutputDataServer) :
     #http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=1083902439&blogid=1321000398&styledm=cnc.qzonestyle.gtimg.cn&imgdm=cnc.qzs.qq.com&bdm=b.cnc.qzone.qq.com&mode=2&numperpage=15&blogseed=0.000866520617759825&property=GoRE&timestamp=1333414941&dprefix=cnc.&g_tk=5381&ref=qzone&v6=1
     #getPostInfoUrl = "http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data";
@@ -910,6 +917,7 @@ def getPostInfoDictFromUrl(url):
             if(postInfoDict) :
                 # got valid post info, so quit now
                 logging.debug("Got valid post info dict from blog_output_data's server=%s", blogOutputDataServer);
+                break;
             else :
                 # not got valid post info, then try next server
                 logging.debug("Can not got valid post info dict from blog_output_data's server=%s", blogOutputDataServer);
@@ -1427,7 +1435,15 @@ def filterPicFilename(filename):
     #print "filteredFilename=",filteredFilename;
     
     return filteredFilename;
-    
+
+#------------------------------------------------------------------------------
+# download file
+def downloadFile(curPostUrl, picInfoDict, dstPicFile) :
+    curUrl = picInfoDict['picUrl'];
+    # urlretrieve in downloadFile is too slow while download QQ Space Picture
+    # so here use manuallyDownloadFile instead
+    return crifanLib.manuallyDownloadFile(curUrl, dstPicFile);
+
 #------------------------------------------------------------------------------
 # get the found pic info after re.search
 # foundPic is MatchObject
@@ -1461,6 +1477,7 @@ def getFoundPicInfo(foundPic):
                 #'fd2' : fd2,
                 #'fd3' : fd3,
             },
+        'isSelfBlog'    : False, # value is set by call isSelfBlogPic
     };
     
     # if match, must be QQ pic
@@ -1488,17 +1505,6 @@ def genNewOtherPicName(picInfoDict):
     #print "newOtherPicName=",newOtherPicName;
 
     return newOtherPicName;
-
-#------------------------------------------------------------------------------
-# check whether is self blog pic
-# depend on following picInfoDict definition
-def isSelfBlogPic(picInfoDict):
-    isSelfPic = False;
-
-    # currently only support QQ space own pic, so here always True
-    isSelfPic = True;
-
-    return isSelfPic;
 
 #------------------------------------------------------------------------------
 def getProcessPhotoCfg():
@@ -1543,10 +1549,11 @@ def getProcessPhotoCfg():
     #http://user.qzone.qq.com/1919008415/blog/1335271336 contain:
     #src=\"http://ctc.qzs.qq.com/qzone/space_item/orig/1/76673/module_1.jpg\"
     
+    #src=\"http://qp.qq.com/cgi-bin/cgi_imgproxy?url=http%3A%2F%2Fimg2.ph.126.net%2FLGtyYjTIUSpbQer7tBJFOw%3D%3D%2F1303229142187329682.jpg&size=0\"
     
     # possible othersite pic url:
 
-    picSufChars = crifanLib.getPicSufChars();
+    #picSufChars = crifanLib.getPicSufChars();
     processPicCfgDict = {
         # currently only support QQ Space self blog pic
         
@@ -1559,16 +1566,20 @@ def getProcessPhotoCfg():
         # find all above (1) - (5) type pic
         #'allPicUrlPat'     : r'(?!\\")http://\w+.photo\.store\.qq\.com/.*?/?[\w\*\.\!\-&;=^/]+(?=\\")',
         #'singlePicUrlPat'  : r'http://(?P<fd1>\w+)\.photo\.store\.qq\.com/.*?/?(?P<filename>[\w\*\.\!\-&;=^/]+)$',
+        
+        #'allPicUrlPat'     : r'(?<=src=\\")http://\w+?\.?\w+?\.?\w+?\.qq\.com/[^"]*?/?[\w\*\.\!\-&;=^/]+(?=\\")',
+        #'singlePicUrlPat'  : r'http://(?P<fd1>\w+)(\.(?P<fd2>\w+?))?(\.(?P<fd3>\w+?))?\.qq\.com/[^"]*?/?(?P<filename>[\w\*\.\!\-&;=^/]+)$',
         'allPicUrlPat'     : r'(?<=src=\\")http://\w+?\.?\w+?\.?\w+?\.qq\.com/[^"]*?/?[\w\*\.\!\-&;=^/]+(?=\\")',
         'singlePicUrlPat'  : r'http://(?P<fd1>\w+)(\.(?P<fd2>\w+?))?(\.(?P<fd3>\w+?))?\.qq\.com/[^"]*?/?(?P<filename>[\w\*\.\!\-&;=^/]+)$',
         
         # # not support (4) http://sz.photo.store.qq.com/rurl2=3637dbbeb..............50968bf355760d7b6
         # 'allPicUrlPat'     : r'(?!\\")http://\w+.photo\.store\.qq\.com/.*?/[\w\*\.\!\-&;\=^/^?]+(?=\\")',
         # 'singlePicUrlPat'  : r'http://(?P<fd1>\w+)\.photo\.store\.qq\.com/.*/(?P<filename>[^/]+)$',
-        
         'getFoundPicInfo'   : getFoundPicInfo,
-        'isSelfBlogPic'     : isSelfBlogPic,
+        'isSelfBlogPic'     : None, # currently only support QQ space own pic, so use default function to always return True
         'genNewOtherPicName': genNewOtherPicName,
+        'isFileValid'       : None,
+        'downloadFile'      : downloadFile,
     };
     
     return processPicCfgDict;

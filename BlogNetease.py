@@ -639,77 +639,6 @@ def findRealFirstPermaLink(blogEntryUrl, permaSerial) :
 
     return endOfPrevLink;
 
-#------------------------------------------------------------------------------
-# generate the file name for other pic
-# depend on following picInfoDict definition
-def genNewOtherPicName(picInfoDict):
-    newOtherPicName = "";
-    
-    filename = picInfoDict['filename'];
-    fd1 = picInfoDict['fields']['fd1'];
-    fd2 = picInfoDict['fields']['fd2'];
-    fd3 = picInfoDict['fields']['fd3'];
-    
-    newOtherPicName = fd1 + '_' + fd2 + "_" + filename;
-
-    return newOtherPicName;
-
-#------------------------------------------------------------------------------
-# check whether is self blog pic
-def isSelfBlogPic(picInfoDict):
-    isSelfPic = False;
-    
-    filename = picInfoDict['filename'];
-    fd1 = picInfoDict['fields']['fd1'];
-    fd2 = picInfoDict['fields']['fd2'];
-    fd3 = picInfoDict['fields']['fd3'];
-    
-    #if ((fd1=='ph') or (fd1=='bimg')) and (fd2=='126') and (fd3=='net') :
-    if (fd2=='126') and (fd3=='net') :
-        #print "isSelfBlogPic: yes";
-        
-        # is 163 pic
-        # http://imgAAA.BBB.126.net/CCC/DDD.EEE
-        # AAA=None/1/3/6/7/182/..., BBB=ph/bimg, CCC=gA402SeBEI_fgrOs8HjFZA==/uCnmEQiWL40RrkIJnXKjsA==, DDD=2844867589615022702/667940119751497876, EEE=jpg
-
-        isSelfPic = True;
-    else :
-        #print "isSelfBlogPic: no";
-        isSelfPic = False;
-
-    return isSelfPic;
-
-#------------------------------------------------------------------------------
-# get the found pic info after re.search
-# foundPic is MatchObject
-def getFoundPicInfo(foundPic):
-    # here should corresponding to singlePicUrlPat in processPicCfgDict
-    picUrl  = foundPic.group(0);
-    fd1     = foundPic.group(1); # for 163 pic, is ph/bimg
-    fd2     = foundPic.group(2); # for 163 pic, is 126
-    fd3     = foundPic.group(3); # for 163 pic, is net
-    filename= foundPic.group("filename");
-    suffix  = foundPic.group("suffix");
-    
-    picInfoDict = {
-        'isSupportedPic': False,
-        'picUrl'        : picUrl,
-        'filename'      : filename,
-        'suffix'        : suffix,
-        'fields'        : 
-            {
-                'fd1' : fd1,
-                'fd2' : fd2,
-                'fd3' : fd3,
-            },
-    };
-        
-    if (suffix in crifanLib.getPicSufList()) :
-        picInfoDict['isSupportedPic'] = True;
-
-    return picInfoDict;
-
-
 ################################################################################
 # Implemented Common Functions 
 ################################################################################
@@ -849,6 +778,31 @@ def parseDatetimeStrToLocalTime(datetimeStr):
     return parsedLocalTime;
 
 #------------------------------------------------------------------------------
+# check whether is self blog pic
+def isSelfBlogPic(picInfoDict):
+    isSelfPic = False;
+    
+    filename = picInfoDict['filename'];
+    fd1 = picInfoDict['fields']['fd1'];
+    fd2 = picInfoDict['fields']['fd2'];
+    fd3 = picInfoDict['fields']['fd3'];
+    
+    #if ((fd1=='ph') or (fd1=='bimg')) and (fd2=='126') and (fd3=='net') :
+    if (fd2=='126') and (fd3=='net') :
+        #print "isSelfBlogPic: yes";
+        
+        # is 163 pic
+        # http://imgAAA.BBB.126.net/CCC/DDD.EEE
+        # AAA=None/1/3/6/7/182/..., BBB=ph/bimg, CCC=gA402SeBEI_fgrOs8HjFZA==/uCnmEQiWL40RrkIJnXKjsA==, DDD=2844867589615022702/667940119751497876, EEE=jpg
+
+        isSelfPic = True;
+    else :
+        #print "isSelfBlogPic: no";
+        isSelfPic = False;
+
+    return isSelfPic;
+
+#------------------------------------------------------------------------------
 def getProcessPhotoCfg():
 
     # possible own 163 pic link:
@@ -876,15 +830,14 @@ def getProcessPhotoCfg():
     # http://img.blog.163.com/photo/NT166ikVSUCOVvSLJfOrNQ==/3734609990997279604.jpg
     # http://a1.phobos.apple.com/r10/Music/y2005/m02/d24/h13/s05.lvnxldzq.170x170-75.jpg
     
-    picSufChars = crifanLib.getPicSufChars();
     processPicCfgDict = {
-        # here only extract last pic name contain: char,digit,-,_
-        'allPicUrlPat'      : r'http://\w{1,20}\.\w{1,20}\.\w{1,10}[\.]?\w*/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}'  + r'\.[' + picSufChars + r']{3,4}',
-        #                              1=field1    2=field2    3=field3                                4=filename                     5=suffix
-        'singlePicUrlPat'   : r'http://\w{1,20}\.(\w{1,20})\.(\w{1,10})[\.]?(\w*)/[\w%\-=]{0,50}[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
-        'getFoundPicInfo'   : getFoundPicInfo,
+        'allPicUrlPat'      : None,
+        'singlePicUrlPat'   : None,
+        'getFoundPicInfo'   : None,
         'isSelfBlogPic'     : isSelfBlogPic,
-        'genNewOtherPicName': genNewOtherPicName,
+        'genNewOtherPicName': None,
+        'isFileValid'       : None,
+        'downloadFile'      : None,
     };
     
     return processPicCfgDict;

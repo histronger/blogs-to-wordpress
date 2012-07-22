@@ -14,6 +14,12 @@ crifan's common functions, implemented by Python.
 1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v2.3]
+1. add removeSoupContentsTagAttr, findFirstNavigableString, soupContentsToUnicode
+
+[v2.0]
+1. add tupleListToDict
+
 [v1.9]
 1.add randDigitsStr
 
@@ -61,7 +67,7 @@ import random;
 
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.9";
+__VERSION__ = "v2.3";
 
 gConst = {
     'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -76,8 +82,10 @@ gConst = {
 
 #----------------------------------global values--------------------------------
 gVal = {
-    'calTimeKeyDict'        : {},
-    'picSufChars'  : '', # store the pic suffix char list
+    'calTimeKeyDict'    : {},
+    'picSufChars'       : '', # store the pic suffix char list
+    
+    'currentLevel'      : 0,
 }
 
 #### some internal functions ###
@@ -325,6 +333,22 @@ def removeCtlChr(inputString) :
     return validContent;
 
 #------------------------------------------------------------------------------
+# remove ANSI control character: 0x80-0xFF
+def removeAnsiCtrlChar(inputString):
+    validContent = '';
+    for c in inputString :
+        asciiVal = ord(c);
+        isValidChr = True;
+        if ((asciiVal >= 0x80) and (asciiVal <= 0xFF)) :
+        #if ((asciiVal >= 0xB0) and (asciiVal <= 0xFF)) : # test
+            isValidChr = False;
+            #print "asciiVal=0x%x"%asciiVal;
+
+        if(isValidChr) :
+            validContent += c;
+    return validContent;
+
+#------------------------------------------------------------------------------
 # convert the string entity to unicode unmber entity
 # refer: http://www.htmlhelp.com/reference/html40/entities/latin1.html
 # TODO: need later use this htmlentitydefs instead following
@@ -557,6 +581,19 @@ def filterList(listToFilter, listToCompare) :
             # record the already exist ones
             existedList.append(singleOne);
     return (filteredList, existedList);
+    
+#------------------------------------------------------------------------------
+# convert tuple list to dict value
+# [(u'type', u'text/javascript'), (u'src', u'http://partner.googleadservices.com/gampad/google_service.js')]
+# { u'type':u'text/javascript', u'src':u'http://partner.googleadservices.com/gampad/google_service.js' }
+def tupleListToDict(tupleList):
+    convertedDict = {};
+    
+    for eachTuple in tupleList:
+        (key, value) = eachTuple;
+        convertedDict[key] = value;
+    
+    return convertedDict;
 
 ################################################################################
 # File
@@ -723,7 +760,7 @@ def manuallyDownloadFile(fileUrl, fileToSave) :
         isDownOK = False;
 
     return isDownOK;
-    
+
 #------------------------------------------------------------------------------
 # get response from url
 # note: if you have already used cookiejar, then here will automatically use it
@@ -1052,6 +1089,195 @@ def transZhcnToEn(strToTrans) :
         (transOK, translatedStr) = translateString(strToTrans, "zh-CN", "en");
 
     return (transOK, translatedStr);
+
+
+################################################################################
+# BeautifulSoup
+################################################################################
+
+#------------------------------------------------------------------------------
+#remove specific tag[key]=value in soup contents (list of BeautifulSoup.Tag/BeautifulSoup.NavigableString)
+# eg:
+# (1)
+# removeSoupContentsTagAttr(soupContents, "p", "class", "cc-lisence")
+# to remove <p class="cc-lisence" style="line-height:180%;">......</p>, from
+# [
+# u'\n',
+# <p class="cc-lisence" style="line-height:180%;">......</p>,
+# u'\u5bf9......\u3002',
+#  <p>跑题了。......我争取。</p>,
+#  <br />,
+#  u'\n',
+#  <div class="clear"></div>,
+# ]
+# (2)
+#contents = removeSoupContentsTagAttr(contents, "div", "class", "addfav", True);
+# remove <div class="addfav">.....</div> from:
+# [u'\n',
+# <div class="postFooter">......</div>, 
+# <div style="padding-left:2em">
+    # ...
+    # <div class="addfav">......</div>
+    # ...
+# </div>,
+ # u'\n']
+def removeSoupContentsTagAttr(soupContents, tagName, tagAttrKey, tagAttrVal="", recursive=False) :
+    global gVal;
+
+    #print "in removeSoupContentsClass";
+
+    #print "[",gVal['currentLevel'],"] input tagName=",tagName," tagAttrKey=",tagAttrKey," tagAttrVal=",tagAttrVal;
+    
+    #logging.debug("[%d] input, %s[%s]=%s, soupContents:%s", gVal['currentLevel'],tagName,tagAttrKey,tagAttrVal, soupContents);
+    #logging.debug("[%d] input, %s[%s]=%s", gVal['currentLevel'],tagName, tagAttrKey, tagAttrVal);
+    
+    filtedContents = [];
+    for singleContent in soupContents:
+        #logging.debug("current singleContent=%s",singleContent);
+    
+        #logging.info("singleContent=%s", singleContent);
+        #print "type(singleContent)=",type(singleContent);
+        #print "singleContent.__class__=",singleContent.__class__;
+        #if(isinstance(singleContent, BeautifulSoup)):
+        #if(BeautifulSoup.Tag == singleContent.__class__):
+        #if(isinstance(singleContent, instance)):
+        #if(isinstance(singleContent, BeautifulSoup.Tag)):
+        if(isinstance(singleContent, Tag)):
+            #print "isinstance true";
+            
+            #logging.debug("singleContent: name=%s, attrMap=%s, attrs=%s",singleContent.name, singleContent.attrMap, singleContent.attrs);
+            # if( (singleContent.name == tagName)
+                # and (singleContent.attrMap)
+                # and (tagAttrKey in singleContent.attrMap)
+                # and ( (tagAttrVal and (singleContent.attrMap[tagAttrKey]==tagAttrVal)) or (not tagAttrVal) ) ):
+                # print "++++++++found tag:",tagName,"[",tagAttrKey,"]=",tagAttrVal,"\n in:",singleContent;
+                # #print "dir(singleContent)=",dir(singleContent);
+                # logging.debug("found %s[%s]=%s in %s", tagName, tagAttrKey, tagAttrVal, singleContent.attrMap);
+
+            # above using attrMap, but attrMap has bug for:
+            #singleContent: name=script, attrMap=None, attrs=[(u'type', u'text/javascript'), (u'src', u'http://partner.googleadservices.com/gampad/google_service.js')]
+            # so use attrs here
+            #logging.debug("singleContent: name=%s, attrs=%s", singleContent.name, singleContent.attrs);
+            attrsDict = tupleListToDict(singleContent.attrs);
+            if( (singleContent.name == tagName)
+                and (singleContent.attrs)
+                and (tagAttrKey in attrsDict)
+                and ( (tagAttrVal and (attrsDict[tagAttrKey]==tagAttrVal)) or (not tagAttrVal) ) ):
+                #print "++++++++found tag:",tagName,"[",tagAttrKey,"]=",tagAttrVal,"\n in:",singleContent;
+                #print "dir(singleContent)=",dir(singleContent);
+                logging.debug("found %s[%s]=%s in %s", tagName, tagAttrKey, tagAttrVal, attrsDict);
+            else:
+                if(recursive):
+                    #print "-----sub call";
+                    gVal['currentLevel'] = gVal['currentLevel'] + 1;
+                    #logging.debug("[%d] now will filter %s[%s=]%s, for singleContent.contents=%s", gVal['currentLevel'], tagName,tagAttrKey,tagAttrVal, singleContent.contents);
+                    #logging.debug("[%d] now will filter %s[%s=]%s", gVal['currentLevel'], tagName,tagAttrKey,tagAttrVal);
+                    filteredSingleContent = singleContent;
+                    filteredSubContentList = removeSoupContentsTagAttr(filteredSingleContent.contents, tagName, tagAttrKey, tagAttrVal, recursive);
+                    gVal['currentLevel'] = gVal['currentLevel'] -1;
+                    filteredSingleContent.contents = filteredSubContentList;
+                    #logging.debug("[%d] after filter, sub contents=%s", gVal['currentLevel'], filteredSingleContent);
+                    #logging.debug("[%d] after filter contents", gVal['currentLevel']);
+                    filtedContents.append(filteredSingleContent);
+                else:
+                    #logging.debug("not recursive, append:%s", singleContent);
+                    #logging.debug("not recursive, now append singleContent");
+                    filtedContents.append(singleContent);
+            
+            # name = singleContent.name;
+            # if(name == tagName):
+                # print "name is equal, name=",name;
+                
+                # attrMap = singleContent.attrMap;
+                # print "attrMap=",attrMap;
+                # if attrMap:
+                    # if tagAttrKey in attrMap:
+                        # print "tagAttrKey=",tagAttrKey," in attrMap";
+                        # if(tagAttrVal and (attrMap[tagAttrKey]==tagAttrVal)) or (not tagAttrVal):
+                            # print "++++++++found tag:",tagName,"[",tagAttrKey,"]=",tagAttrVal,"\n in:",singleContent;
+                            # #print "dir(singleContent)=",dir(singleContent);
+                            # logging.debug("found tag, tagAttrVal=%s, %s[%s]=%s", tagAttrVal, tagName, tagAttrVal, attrMap[tagAttrKey]);
+                        # else:
+                            # print "key in attrMap, but value not equal";
+                            # if(recursive):
+                                # print "-----sub call 111";
+                                # gVal['currentLevel'] = gVal['currentLevel'] + 1;
+                                # singleContent = removeSoupContentsTagAttr(singleContent.contents, tagName, tagAttrKey, tagAttrVal, recursive);
+                                # gVal['currentLevel'] = gVal['currentLevel'] -1;
+                            # filtedContents.append(singleContent);
+                    # else:
+                        # print "key not in attrMap";
+                        # if(recursive):
+                            # print "-----sub call 222";
+                            # gVal['currentLevel'] = gVal['currentLevel'] + 1;
+                            # singleContent = removeSoupContentsTagAttr(singleContent.contents, tagName, tagAttrKey, tagAttrVal, recursive);
+                            # gVal['currentLevel'] = gVal['currentLevel'] -1;
+                        # filtedContents.append(singleContent);
+                # else:
+                    # print "attrMap is None";
+                    # if(recursive):
+                        # print "-----sub call 333";
+                        # gVal['currentLevel'] = gVal['currentLevel'] + 1;
+                        # singleContent = removeSoupContentsTagAttr(singleContent.contents, tagName, tagAttrKey, tagAttrVal, recursive);
+                        # gVal['currentLevel'] = gVal['currentLevel'] -1;
+                    # filtedContents.append(singleContent);
+            # else:
+                # print "name not equal, name=",name," tagName=",tagName;
+                # if(recursive):
+                    # print "-----sub call 444";
+                    # gVal['currentLevel'] = gVal['currentLevel'] + 1;
+                    # singleContent = removeSoupContentsTagAttr(singleContent.contents, tagName, tagAttrKey, tagAttrVal, recursive);
+                    # gVal['currentLevel'] = gVal['currentLevel'] -1;
+                # filtedContents.append(singleContent);
+        else:
+            # is BeautifulSoup.NavigableString
+            #print "not BeautifulSoup instance";
+            filtedContents.append(singleContent);
+
+    #print "filterd contents=",filtedContents;
+    #logging.debug("[%d] before return, filtedContents=%s", gVal['currentLevel'], filtedContents);
+    
+    return filtedContents;
+
+#------------------------------------------------------------------------------
+# convert soup contents into unicode string
+def soupContentsToUnicode(soupContents) :
+    #method 1
+    mappedContents = map(CData, soupContents);
+    #print "mappedContents OK";
+    #print "type(mappedContents)=",type(mappedContents); #type(mappedContents)= <type 'list'>
+    contentUni = ''.join(mappedContents);
+    #print "contentUni=",contentUni;
+    
+    # #method 2
+    # originBlogContent = "";
+    # logging.debug("Total %d contents for original soup contents:", len(soupContents));
+    # for i, content in enumerate(soupContents):
+        # if(content):
+            # logging.debug("[%d]=%s", i, content);
+            # originBlogContent += unicode(content);
+        # else :
+            # logging.debug("[%d] is null", i);
+    
+    # logging.debug("---method 1: map and join---\n%s", contentUni);
+    # logging.debug("---method 2: enumerate   ---\n%s", originBlogContent);
+    
+    # # -->> seem that two method got same blog content
+    
+    #logging.debug("soup contents to unicode string OK");
+    return contentUni;
+
+#------------------------------------------------------------------------------
+# find the first BeautifulSoup.NavigableString from soup contents
+def findFirstNavigableString(soupContents):
+    firstString = None;
+    for eachContent in soupContents:
+        # note here must import NavigableString from BeautifulSoup
+        if(isinstance(eachContent, NavigableString)): 
+            firstString = eachContent;
+            break;
+
+    return firstString;
 
 #------------------------------------------------------------------------------
 if __name__=="crifanLib":

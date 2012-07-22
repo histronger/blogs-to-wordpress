@@ -3,12 +3,12 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v9.2
+版本：     v11.5
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
 【详细信息】
-BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐sohu等博客搬家到WordPress
+BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，Blogbus博客大巴等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
@@ -21,22 +21,32 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v11.5]
+1. support Blogbus
+2. add unified downloadFile and isFileValid during process pic
+3. fix pic filter regular pattern to support more type picture, include 3 fields, https, upper suffix
+4. support use default pic setting
+5. support new baidu space
+6. support many template for new baidu space, include: 
+时间旅程,平行线,边走边看,窗外风景,雕刻时光,粉色佳人,理性格调,清心雅筑,低调优雅,蜕变新生,质感酷黑,经典简洁
+7. support non-title post for new baidu space
+
 [v9.2]
-1.support modify 163 post via manually input verify code.
+1. support modify 163 post via manually input verify code.
 
 [v9.1]
-1.export WXR during processing => whole process speed become a little bit faster !
-2.change default pic prefix path to http://localhost/wp-content/uploads/pic
+1. export WXR during processing => whole process speed become a little bit faster !
+2. change default pic prefix path to http://localhost/wp-content/uploads/pic
 
 [v8.7]
-1.support all type of other site pic for BlogSina
+1. support all type of other site pic for BlogSina
 
 [v8.6]
-1.support other site pic for BlogSina
-2.support quoted filename check for crifanLib
+1. support other site pic for BlogSina
+2. support quoted filename check for crifanLib
 
 [v8.4]
-1.support more type pic for BlogQQ
+1. support more type pic for BlogQQ
 
 [v8.3]
 1. add Sohu blog support.
@@ -44,14 +54,14 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3. add remove control char for comment author and content
 
 [v7.0]
-1.add CSDN blog support.
+1. add CSDN blog support.
 
 [v6.2]
 1. add RenRen Blog support.
 2. For title and category, move repUniNumEntToChar and saxutils.escape from different blog providers into main function
 
 [v5.6]
-1.（当评论数据超多的时候，比如sina韩寒博客帖子评论，很多都是2,3万个的）添加日志信息，显示当前已处理多少个评论。
+1. （当评论数据超多的时候，比如sina韩寒博客帖子评论，很多都是2,3万个的）添加日志信息，显示当前已处理多少个评论。
 
 -------------------------------------------------------------------------------
 """
@@ -80,10 +90,11 @@ import BlogQQ;
 import BlogRenren;
 import BlogCsdn;
 import BlogSohu;
+import BlogBlogbus;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v9.2";
+__VERSION__ = "v11.5";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
@@ -140,6 +151,12 @@ gConst = {
             'mandatoryIncStr'   : "blog.sohu.com",
             'descStr'           : "Sohu Blog",
         },
+
+        'Blogbus' : {
+            'blogModule'        : BlogBlogbus,
+            'mandatoryIncStr'   : ".blogbus.com",
+            'descStr'           : "Blogbus Blog",
+        },
     } ,
 };
 
@@ -153,6 +170,7 @@ gVal = {
                                 'tagSlugDict':{},
                                 },
     'postID'                : 0,
+    'curPostUrl'            : "",
     'blogUser'              : '',
     'blogEntryUrl'          : '',
     'processedUrlList'      : [],
@@ -164,6 +182,8 @@ gVal = {
     'errorUrlList'          : [], # store the (pic) url, which error while open
     'postModifyPattern'     : '', # the string, after repalce the pattern, used for each post
     
+    #----------------------------------
+    # used to output xml during processing
     'wxrHeaderUni'          : '',
     'wxrHeaderSize'         : 0,
     
@@ -191,6 +211,8 @@ gVal = {
     
     'nextCatId'        : 1,
     'nextTagId'        : 1,
+    #----------------------------------
+    'curPicCfgDict'         : {}, # store current/active/real picure config dict
 };
 
 #--------------------------configurable values---------------------------------
@@ -281,6 +303,137 @@ def packageCDATA(info):
     return info;
 
 #------------------------------------------------------------------------------
+# download file
+def defDownloadFile(curPostUrl, picInfoDict, dstPicFile) :
+    curUrl = picInfoDict['picUrl'];
+    #use common function to download file
+    return crifanLib.downloadFile(curUrl, dstPicFile);
+
+#------------------------------------------------------------------------------
+#check file validation
+def defIsFileValid(picInfoDict):
+    curUrl = picInfoDict['picUrl'];
+    #use common function to check file validation
+    return crifanLib.isFileValid(curUrl);
+
+#------------------------------------------------------------------------------
+# generate the file name for other pic
+# depend on following picInfoDict definition
+def defGenNewOtherPicName(picInfoDict):
+    newOtherPicName = "";
+    
+    filename = picInfoDict['filename'];
+    fd1 = picInfoDict['fields']['fd1'];
+    fd2 = picInfoDict['fields']['fd2'];
+    
+    newOtherPicName = fd1 + '_' + fd2 + "_" + filename;
+
+    return newOtherPicName;
+ 
+#------------------------------------------------------------------------------
+# check whether is self blog pic
+# depend on following picInfoDict definition
+# here default to set True: consider all pic is self blog pic
+def defIsSelfBlogPic(picInfoDict):
+    isSelfPic = True;
+    logging.debug("defIsSelfBlogPic: %s", isSelfPic);
+    return isSelfPic;
+
+#------------------------------------------------------------------------------
+# get the found pic info after re.search
+# foundPic is MatchObject
+def defGetFoundPicInfo(foundPic):
+    # here should corresponding to singlePicUrlPat in curPicCfgDict
+    picUrl  = foundPic.group(0);
+    fd1     = foundPic.group("fd1"); # blog user's name / img1
+    fd2     = foundPic.group("fd2"); # blogbus / blogbuscdn
+    fd3     = foundPic.group("fd3"); # com
+    fd4     = foundPic.group("fd4"); # 
+    fd5     = foundPic.group("fd5"); # 
+    fd6     = foundPic.group("fd6"); #
+    filename= foundPic.group("filename");
+    suffix  = foundPic.group("suffix");
+    
+    #logging.debug("fd:%s,%s,%s,%s,%s,%s, filename=%s, suffix=%s", fd1,fd2,fd3,fd4,fd5,fd6, filename, suffix);
+    
+    picInfoDict = {
+        'isSupportedPic': False,
+        'picUrl'        : picUrl,
+        'filename'      : filename,
+        'suffix'        : suffix,
+        'fields'        : 
+            {
+                'fd1' : fd1,
+                'fd2' : fd2,
+                'fd3' : fd3,
+                'fd4' : fd4,
+                'fd5' : fd5,
+                'fd6' : fd6,
+            },
+        'isSelfBlog'    : False, # value is set by call isSelfBlogPic
+    };
+    
+    if (suffix.lower() in crifanLib.getPicSufList()) :
+        picInfoDict['isSupportedPic'] = True;
+        logging.debug("%s is supported pic", picUrl);
+
+    return picInfoDict;
+
+#------------------------------------------------------------------------------
+# 1. generate the default picture config dict
+# 2. init config dict
+def initPicCfgDict():
+    global gVal;
+    
+    # 1. generate the default picture config dict
+    logging.debug("now to generate the default picture config dict");
+
+    picSufChars = crifanLib.getPicSufChars();
+    logging.debug("picSufChars=%s", picSufChars);
+    
+    # more about the following re pattern corresponding pic url type
+    # can refer the detailed comments in each blog's getProcessPhotoCfg function
+
+    defPicCfgDict = {
+        #'allPicUrlPat'      : r'(?<=src=")http://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
+        #'singlePicUrlPat'   : r'http://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
+
+        #'allPicUrlPat'      : r'(?<=src=")http://\w+?\.\w+?\.?\w*?\.?\w*?\.?\w*?\.?\w*?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
+        #'singlePicUrlPat'   : r'http://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w*?))?(\.(?P<fd4>\w*?))?(\.(?P<fd5>\w*?))?(\.(?P<fd6>\w*?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
+        
+        'allPicUrlPat'      : r'(?<=src=")https?://\w+?\.\w+?\.?\w*?\.?\w*?\.?\w*?\.?\w*?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
+        'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w*?))?(\.(?P<fd4>\w*?))?(\.(?P<fd5>\w*?))?(\.(?P<fd6>\w*?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
+        
+        # allPicUrlPat:     search pattern for all pic, should not include '()'
+        # singlePicUrlPat:  search pattern for single pic, should inclde '()'
+        'getFoundPicInfo'       : defGetFoundPicInfo,   # function to get the found pic info after re.search
+        'isSelfBlogPic'         : defIsSelfBlogPic,     # function to func to check whether is self blog pic, otherwise is other site pic
+        'genNewOtherPicName'    : defGenNewOtherPicName,# function to generate the new name for other pic
+        'isFileValid'           : defIsFileValid,   # function to check the (pic) url/file is valid or not
+        'downloadFile'          : defDownloadFile,  # function to download picture, maybe some special blog pic download need special process:
+                                                    # 1. QQ: speed is low
+                                                    # 2. blogbus: download pic need referer
+    };
+    
+    logging.debug("defPicCfgDict=%s", defPicCfgDict);
+
+    # 2. init config dict
+    gotPicCfgDict = getProcessPhotoCfg();
+    logging.debug("gotPicCfgDict=%s", gotPicCfgDict);
+    
+    curPicCfgDict = gotPicCfgDict;
+    for eachCfg in gotPicCfgDict:
+        if(not gotPicCfgDict[eachCfg]):
+            # if empty -> use default config
+            curPicCfgDict[eachCfg] = defPicCfgDict[eachCfg];
+    
+    gVal['curPicCfgDict'] = curPicCfgDict;
+
+    logging.debug("gVal['curPicCfgDict']=%s", gVal['curPicCfgDict']);
+
+    return ;
+
+#------------------------------------------------------------------------------
 # 1. extract picture URL from blog content
 # 2. process it:
 #       remove overlapped 
@@ -300,23 +453,13 @@ def processPhotos(blogContent):
             
             #logging.debug("before find pic, post Conten=%s", blogContent);
 
-            processPicCfgDict = {
-                'allPicUrlPat'      : r"",  # search pattern for all pic, should not include '()'
-                'singlePicUrlPat'   : r"",  # search pattern for single pic, should inclde '()'
-                'getFoundPicInfo'   : None, # get the found pic info after re.search
-                'isSelfBlogPic'     : None, # func to check whether is self blog pic
-                'genNewOtherPicName': None, # generate the new name for other pic
-            };
-
-            processPicCfgDict = getProcessPhotoCfg();
-            #print "processPicCfgDict=",processPicCfgDict;
-  
-            allUrlPattern = processPicCfgDict['allPicUrlPat'];
+            curPicCfgDict = gVal['curPicCfgDict'];
+            allUrlPattern = curPicCfgDict['allPicUrlPat'];
             #print "allUrlPattern=",allUrlPattern;
 
             # if matched, result for findall() is a list when no () in pattern
             matchedList = re.findall(allUrlPattern, blogContent);
-            #print "Len(matchedList)=",len(matchedList);
+            logging.debug("Len(matchedList)=%d", len(matchedList));
             #print "matchedList=",matchedList;
             if matchedList :
                 nonOverlapList = crifanLib.uniqueList(matchedList); # remove processed
@@ -341,7 +484,7 @@ def processPhotos(blogContent):
                         picNum += 1;
 
                         # process this url
-                        singleUrlPattern = processPicCfgDict['singlePicUrlPat'];
+                        singleUrlPattern = curPicCfgDict['singlePicUrlPat'];
                         #print "singleUrlPattern=",singleUrlPattern;
                         
                         foundPic = re.search(singleUrlPattern, curUrl);
@@ -354,9 +497,10 @@ def processPhotos(blogContent):
                                 'filename'      : "", # filename of pic
                                 'suffix'        : "", # maybe empty for sina pic url
                                 'fields'        : {}, # depend on the implemented functions, normal should contains fd1/fd2/fd3/...
+                                'isSelfBlog'    : False,#is self blog pic, otherwise is other site pic
                             };
                             
-                            picInfoDict = processPicCfgDict['getFoundPicInfo'](foundPic);
+                            picInfoDict = curPicCfgDict['getFoundPicInfo'](foundPic);
                             #print "picInfoDict=",picInfoDict;
 
                             if picInfoDict['isSupportedPic'] :
@@ -377,8 +521,12 @@ def processPhotos(blogContent):
                                 # print "suffix=",suffix
                                 # print "picInfoDict['fields']=",picInfoDict['fields'];
                             
+                                # check isSelfBlog first to get info for latter isFileValid
+                                picInfoDict['isSelfBlog'] = curPicCfgDict['isSelfBlogPic'](picInfoDict);
+                                
                                 # indeed is pic, process it
-                                (picIsValid, errReason) = crifanLib.isFileValid(curUrl);
+                                #(picIsValid, errReason) = curPicCfgDict['isFileValid'](curUrl);
+                                (picIsValid, errReason) = curPicCfgDict['isFileValid'](picInfoDict);
                                 #print "picIsValid=",picIsValid;
                                 if picIsValid :
                                     # 1. prepare info
@@ -395,7 +543,7 @@ def processPhotos(blogContent):
                                             os.makedirs(dstPathOtherPic); # create dir recursively
                                             logging.info("Create dir %s for save downloaded pictures of other site", dstPathOtherPic);
                                     # 3. prepare info for follow download and save
-                                    if(processPicCfgDict['isSelfBlogPic'](picInfoDict)):
+                                    if(picInfoDict['isSelfBlog']):
                                         #print "++++ yes is self blog pic";
                                         newPicUrl = gCfg['picPathInWP'] + '/' + nameWithSuf;
                                         dstPicFile = dstPathOwnPic + '\\' + nameWithSuf;
@@ -404,7 +552,7 @@ def processPhotos(blogContent):
                                         #print "--- is other pic";
                                         if gCfg['processOtherPic'] == 'yes' :
                                             #newNameWithSuf = fd1 + '_' + fd2 + "_" + nameWithSuf;
-                                            newNameWithSuf = processPicCfgDict['genNewOtherPicName'](picInfoDict) + '.' + suffix;
+                                            newNameWithSuf = curPicCfgDict['genNewOtherPicName'](picInfoDict) + '.' + suffix;
                                             #print "newNameWithSuf=",newNameWithSuf;
                                             newPicUrl = gCfg['otherPicPathInWP'] + '/' + newNameWithSuf;
                                             dstPicFile = dstPathOtherPic + '\\' + newNameWithSuf;
@@ -413,13 +561,12 @@ def processPhotos(blogContent):
                                             #newPicUrl = curUrl
 
                                     # download pic and replace url
-                                    #print "dstPicFile=",dstPicFile;
+                                    logging.debug("dstPicFile=%s", dstPicFile);
                                     
                                     #if dstPicFile and crifanLib.downloadFile(curUrl, dstPicFile) : 
-                                    # urlretrieve in downloadFile is too slow while download QQ Space Picture
-                                    # so here use manuallyDownloadFile instead
-                                    if dstPicFile and crifanLib.manuallyDownloadFile(curUrl, dstPicFile) :
+                                    if dstPicFile and curPicCfgDict['downloadFile'](gVal['curPostUrl'], picInfoDict, dstPicFile) :
                                         # replace old url with new url
+                                        logging.debug("download pic OK, now to replace url");
                                         
                                         # http://b306.photo.store.qq.com/psb?/8d8d9a4f-2e9f-4b37-82d4-4559d7ec8472/E8WLK8l*kBjpak.5kg.xPzZ.**38oN517LBfrBNEAaQ!/b/YQN5aLZpBwAAYmuLa7YOBwAA
                                         # will fail for follow line
@@ -643,6 +790,8 @@ def fetchSinglePost(url):
 
     #update post id
     gVal['postID'] += 1;
+    
+    gVal['curPostUrl'] = url;
 
     logging.debug("----------------------------------------------------------");
     logging.info("[%04d] %s", gVal['postID'], url);
@@ -876,7 +1025,7 @@ def generateHeader():
     gVal['wxrHeaderUni'] = wxrHeaderUni;
     gVal['wxrHeaderSize'] = wxrHeaderSize;
     
-    logging.info("generate wxr header OK");
+    logging.info("Generate wxr header OK");
 
     return ;
 
@@ -898,7 +1047,7 @@ def generateGenerator():
     gVal['generatorUni'] = generatorUni;
     gVal['generatorSize'] = generatorSize;
     
-    logging.info("generate generator OK");
+    logging.info("Generate generator OK");
 
     return ;
 
@@ -913,7 +1062,7 @@ def generateTail():
     gVal['tailUni'] = tailUni;
     gVal['tailSize'] = tailSize;
     
-    logging.info("generate tail OK");
+    logging.info("Generate tail OK");
 
     return;
 
@@ -1120,7 +1269,7 @@ def getBlogHeadInfo(blogInfoDic) :
     blogInfoDic['blogUser'] = gVal['wxrValidUsername'];
     blogInfoDic['blogPubDate'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S +0000');
 
-    logging.info("get blog head info OK");
+    logging.info("Get blog head info OK");
 
     return;
 
@@ -1291,14 +1440,14 @@ def main():
     parser.add_option("-v","--postTypeToProcess",action="store",type="string",default='publicOnly',dest="postTypeToProcess",help=u"要处理哪些类型的帖子：publicOnly，privateOnly，privateAndPublic。注意：当设置为非publicOnly的时候，是需要提供对应的用户名和密码的，登陆对应的博客才可以执行对应的操作，即获取对应的private等类型帖子的。");
     parser.add_option("-t","--processType",action="store",type="string",default='exportToWxr',dest="processType",help=u"对于相应类型类型的帖子，具体如何处理，即处理的类型：exportToWxr和modifyPost。exportToWxr是将帖子内容导出为WXR；modifyPost是修改帖子内容（并提交，以达到更新帖子的目的），注意需要设置相关的参数：username，password，modifyPostPatFile.");
     parser.add_option("-d","--modifyPostPatFile",action="store",type="string",dest="modifyPostPatFile",help=u"修改帖子的模板，即需要更新的帖子的新的内容。支持相关参数。注意，需要输入的配置文件是UTF-8格式的。支持的格式化参数包括： ${originBlogContent}表示原先帖子的内容；${titleForPublish}表示用于发布的帖子的标题，即翻译并编码后的标题，该标题主要用于wordpress中帖子的永久链接；${originalTitle}表示原先帖子的标题内容；${quotedTitle}表示将原标题编码后的标题；${postYear},${postMonth},${postDay}分别表示帖子发布时间的年月日，均为2位数字；${category}表示帖子的分类。");
-    parser.add_option("-j","--autoJumpSensitivePost",action="store",type="string",default='yes',dest="autoJumpSensitivePost",help=u"自动跳过（即不更新处理）那些包含敏感信息的帖子：yes或no。默认为yes。比如如果去修改某些百度帖子的话，其会返回 '文章内容包含不合适内容，请检查'，'文章标题包含不合适内容，请检查',等提示，此处则可以自动跳过，不处理此类帖子。");
+    parser.add_option("-j","--autoJumpSensitivePost",action="store",type="string",default='yes',dest="autoJumpSensitivePost",help=u"自动跳过（即不更新处理）那些包含敏感信息的帖子：yes或no。默认为yes。比如如果去修改某些旧版百度空间帖子的话，其会返回 '文章内容包含不合适内容，请检查'，'文章标题包含不合适内容，请检查',等提示，此处则可以自动跳过，不处理此类帖子。");
     
     logging.info(u"版本信息：%s", __VERSION__);
     logging.info(u"1.如发现bug，请将日志文件和bug截图等信息发至：admin(at)crifan.com");
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
     #Change Here If Add New Blog Provider Support
-    logging.info(u"  BlogsToWordPress：将百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐等博客搬家到WordPress");
+    logging.info(u"  BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，博客大巴Blogbus等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
     
@@ -1408,6 +1557,9 @@ def main():
     
     #initialize for export post
     if(gCfg['processType'] == "exportToWxr") :
+        if gCfg['processPic'] == 'yes' :
+            initPicCfgDict();
+
         initForOutputFile();
         
         generateWxrValidUsername();

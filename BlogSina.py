@@ -794,12 +794,17 @@ def getProcessPhotoCfg():
         #'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[\w%\-=^"]*/?[\w%\-=/^"]+/[\w^"\-\.&;=\[\]]+(?=")',
         #'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/.+?/(?P<filename>[\w\[\]&;=\-]+)(\.(?P<suffix>\w{3,4})?)?',
         
-        'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[^"]*/?[^"]+/?[^"]+(?=")',
-        'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/[^"]*?/?(?P<filename>[^"]+)(\.(?P<suffix>\w{3,4}))?',
+        #'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w+?\.?\w+?\.?\w+?\.?\w+?/[^"]*/?[^"]+/?[^"]+(?=")',
+        #'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w+?))?(\.(?P<fd4>\w+?))?(\.(?P<fd5>\w+?))?(\.(?P<fd6>\w+?))?/[^"]*?/?(?P<filename>[^"]+)(\.(?P<suffix>\w{3,4}))?',
 
-        'getFoundPicInfo'       : getFoundPicInfo,
-        'isSelfBlogPic'         : isSelfBlogPic,
-        'genNewOtherPicName'    : genNewOtherPicName,
+        'allPicUrlPat'      : r'(?<=real_src=")https?://\w+?\.\w+?\.?\w*?\.?\w*?\.?\w*?\.?\w*?/[^"]*/?[^"]+/?[^"]+(?=")',
+        'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w*?))?(\.(?P<fd4>\w*?))?(\.(?P<fd5>\w*?))?(\.(?P<fd6>\w*?))?/[^"]*?/?(?P<filename>[^"]+)(\.(?P<suffix>\w{3,4}))?',
+
+        'getFoundPicInfo'   : getFoundPicInfo,
+        'isSelfBlogPic'     : isSelfBlogPic,
+        'genNewOtherPicName': genNewOtherPicName,
+        'isFileValid'       : None,
+        'downloadFile'      : None,
     };
     
     return processPicCfgDict;
