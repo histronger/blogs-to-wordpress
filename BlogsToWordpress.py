@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v11.5
+版本：     v12.8
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -21,6 +21,13 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v12.8]
+1. BlogBaidu update for support new space
+
+[v11.7]
+1.move blog modules into sub dir
+2.change pic search pattern to support non-capture match
+
 [v11.5]
 1. support Blogbus
 2. add unified downloadFile and isFileValid during process pic
@@ -70,6 +77,8 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 import os;
 import re;
 import sys;
+sys.path.append("libs");
+sys.path.append("libs/blogModules");
 import math;
 import time;
 import codecs;
@@ -94,7 +103,7 @@ import BlogBlogbus;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v11.5";
+__VERSION__ = "v12.8";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
@@ -401,7 +410,10 @@ def initPicCfgDict():
         #'allPicUrlPat'      : r'(?<=src=")http://\w+?\.\w+?\.?\w*?\.?\w*?\.?\w*?\.?\w*?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
         #'singlePicUrlPat'   : r'http://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w*?))?(\.(?P<fd4>\w*?))?(\.(?P<fd5>\w*?))?(\.(?P<fd6>\w*?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
         
-        'allPicUrlPat'      : r'(?<=src=")https?://\w+?\.\w+?\.?\w*?\.?\w*?\.?\w*?\.?\w*?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
+        #'allPicUrlPat'      : r'(?<=src=")https?://\w+?\.\w+?\.?\w*?\.?\w*?\.?\w*?\.?\w*?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
+        #'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w*?))?(\.(?P<fd4>\w*?))?(\.(?P<fd5>\w*?))?(\.(?P<fd6>\w*?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
+        
+        'allPicUrlPat'      : r'(?<=src=")https?://(?:\w+?)\.(?:\w+?)(?:\.(?:\w*?))?(?:\.(?:\w*?))?(?:\.(?:\w*?))?(?:\.(?:\w*?))?/[\w%\-=]{0,50}[/]?[\w%\-/=]*/[\w\-\.]{1,100}' + r'\.[' + picSufChars + r']{3,4}(?=")',
         'singlePicUrlPat'   : r'https?://(?P<fd1>\w+?)\.(?P<fd2>\w+?)(\.(?P<fd3>\w*?))?(\.(?P<fd4>\w*?))?(\.(?P<fd5>\w*?))?(\.(?P<fd6>\w*?))?/([\w%\-=]{0,50})[/]?[\w\-/%=]*/(?P<filename>[\w\-\.]{1,100})' + r'\.(?P<suffix>[' + picSufChars + r']{3,4})',
         
         # allPicUrlPat:     search pattern for all pic, should not include '()'
@@ -1543,7 +1555,7 @@ def main():
         (found, retStr)= find1stPermalink();
         if(found) :
             permalink = retStr;
-            logging.info("Found the first link %s ", permalink);
+            logging.info("Found the first link %s", permalink);
         else :
             logging.error("Can not find the first link for %s, error=%s", srcUrl, retStr);
             sys.exit(2);
