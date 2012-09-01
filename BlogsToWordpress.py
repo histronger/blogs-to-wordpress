@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v12.8
+版本：     v13.8
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -21,6 +21,9 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v13.8]
+1. do release include chardet 1.0.1
+
 [v12.8]
 1. BlogBaidu update for support new space
 
@@ -77,8 +80,9 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 import os;
 import re;
 import sys;
-sys.path.append("libs");
-sys.path.append("libs/blogModules");
+sys.path.append("libs/crifan");
+sys.path.append("libs/crifan/blogModules");
+sys.path.append("libs/thirdparty");
 import math;
 import time;
 import codecs;
@@ -103,7 +107,7 @@ import BlogBlogbus;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v12.8";
+__VERSION__ = "v13.8";
 
 gConst = {
     'generator'         : "http://www.crifan.com",
