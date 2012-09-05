@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v13.8
+版本：     v13.9
 作者：     crifan
 联系方式： http://www.crifan.com/contact_me/
 
@@ -21,6 +21,9 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v13.9]
+1. BlogRenren add captcha for login
+
 [v13.8]
 1. do release include chardet 1.0.1
 
@@ -107,7 +110,7 @@ import BlogBlogbus;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v13.8";
+__VERSION__ = "v13.9";
 
 gConst = {
     'generator'         : "http://www.crifan.com",

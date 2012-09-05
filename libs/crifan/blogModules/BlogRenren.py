@@ -6,6 +6,10 @@ For BlogsToWordpress, this file contains the functions for Renren Blog.
 
 [TODO]
 
+[History]
+v1.1:
+1. support captcha while login
+
 """
 
 import os;
@@ -23,9 +27,10 @@ import cookielib;
 #from xml.sax import saxutils;
 import json; # New in version 2.6.
 #import random;
+import StringIO;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.0";
+__VERSION__ = "v1.1";
 
 gConst = {
     'spaceDomain'  : 'http://www.renren.com',
@@ -1076,58 +1081,116 @@ def getProcessPhotoCfg():
 #{"catchaCount":3,"code":false,"homeUrl":"http://www.renren.com/SysHome.do?origURL=http%3A%2F%2Fwww.renren.com%2Fhome&catchaCount=3&failCode=512","failDescription":"您输入的验证码不正确","failCode":512,"email":"green-waste@163.com"}
 #{"code":true,"homeUrl":"http://www.renren.com/callback.do?t=a951001569377c7c22013b37c39b697a6&origURL=http%3A%2F%2Fwww.renren.com%2Fhome&needNotify=false"}
 def isLoginOk(respCodeJson):
-    (isOk, retInfo) = (False, "Unknown error !");
+    (isOk, homeUrl, failDescription) = (False, "Default: Invalid Home Url", "Default: No Fail Description");
     codeDict = json.loads(respCodeJson);
+    logging.debug("parse login return json ok");
     #print "codeDict=",codeDict;
     isOk = codeDict['code'];
-    if(isOk) :
-        retInfo = codeDict['homeUrl'];
-    else :
-        retInfo = codeDict['failDescription'];
-    
-    return (isOk, retInfo);
+    homeUrl = codeDict['homeUrl'];
+    logging.debug("isOk=%s, homeUrl=%s", isOk, homeUrl);
+    if(not isOk):
+        # if login true, then no failDescription
+        if('failDescription' in codeDict):
+            failDescription = codeDict['failDescription'];
+
+    return (isOk, homeUrl, failDescription);
     
 #------------------------------------------------------------------------------
 # log in Blog
 def loginBlog(username, password) :
     loginOk = False;
     
-    loginUrl = "http://www.renren.com/ajaxLogin/login";
-    
     gVal['cj'] = cookielib.CookieJar();
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(gVal['cj']));
     urllib2.install_opener(opener);
     
+    # 1. fetch get_check_x
+    renrenHomeUrl = "http://www.renren.com/";
+    respHtml = crifanLib.getUrlRespHtml(renrenHomeUrl);
+    #XN = {get_check:'',get_check_x:'c5f17df8',env:{domain:'renren.com',shortSiteName:'人人',siteName:'人人网'}};
+    foundGetCheckX = re.search("XN\s.*?=\s.*?\{get_check:'.*?',get_check_x:'(?P<get_check_x>\w+)'.+?\}", respHtml);
+    logging.debug("foundGetCheckX=%s", foundGetCheckX);
+    if(foundGetCheckX):
+        get_check_x = foundGetCheckX.group("get_check_x");
+        logging.debug("get_check_x=%s", get_check_x);
+
+    # 2. getcode
+    #http://icode.renren.com/getcode.do?t=web_login&rnd=Math.random()
+    getcodeUrl = "http://icode.renren.com/getcode.do?t=web_login";
+    respHtml = crifanLib.getUrlRespHtml(getcodeUrl);
+    #logging.info("respHtml=%s", respHtml);
+    logging.debug("now will import PIL module for renren verify code");
+    from PIL import Image;
+    logging.debug("import PIL module OK");
+    img = Image.open(StringIO.StringIO(respHtml));
+    # 如果看不到图片，请参考：
+    #【已解决】Python中通过Image的open之后，去show结果打不开bmp图片，无法正常显示图片
+    #http://www.crifan.com/python_image_show_can_not_open_bmp_image_file/
+    img.show();
+
+    hintStr = unicode("请输入所看到的(4个字母的)验证码：", "utf-8");
+    icode = raw_input(hintStr.encode("GB18030"));
+    logging.info("Your input verify code is %s", icode);
+
+    # 3. show captcha
+    getCaptchaUrl = "http://www.renren.com/ajax/ShowCaptcha";
+    # email=shidong84%40googlemail.com&
+    # password=&
+    # icode=&
+    # origURL=http%3A%2F%2Fwww.renren.com%2Fhome&
+    # domain=renren.com&
+    # key_id=1&
+    # captcha_type=web_login&
+    # _rtk=c5f17df8
     postDict = {
         'email'     : username,
-        'password'  : password,
+        'password'  : "",
         'icode'     : "",
         'origURL'   : "http://www.renren.com/home",
         'domain'    : "renren.com",
         'key_id'    : "1",
-        '_rtk'      : "c60cc3e6",
+        'captcha_type':"web_login",
+        '_rtk'      : get_check_x,
+    }
+    respHtml = crifanLib.getUrlRespHtml(getCaptchaUrl, postDict);
+    logging.debug("getCaptchaUrl=%s, respHtml=%s", getCaptchaUrl, respHtml);
+    
+    # 4. login
+    loginUrl = "http://www.renren.com/ajaxLogin/login";
+    postDict = {
+        'email'     : username,
+        'password'  : password,
+        'icode'     : icode,
+        'origURL'   : "http://www.renren.com/home",
+        'domain'    : "renren.com",
+        'key_id'    : "1",
+        'captcha_type':"web_login",
+        '_rtk'      : get_check_x, #"c60cc3e6", "c5f17df8"
     };
-    
-    #resp = urllib2.urlopen(loginUrl);
-    #respJson = resp.read();
-    
-    #respJson = crifanLib.getUrlRespHtml(loginUrl, postDict=postDict, useGzip=False);
-    #respJson = crifanLib.getUrlRespHtml(loginUrl, postDict=postDict);
-    resp = crifanLib.getUrlResponse(loginUrl, postDict=postDict);
-    respJson = resp.read();
-    respInfo = resp.info();
-    logging.debug("renren login return info:\n%s", respInfo);
+
+    respJson = crifanLib.getUrlRespHtml(loginUrl, postDict);
     logging.debug('renren login return json:\n%s', respJson);
     
-    (loginOk, retInfo) = isLoginOk(respJson);
-    #print "(loginOk, retInfo)=",(loginOk, retInfo);
-    homeUrl = "";
+    (loginOk, homeUrl, failDescription) = isLoginOk(respJson);
+    logging.debug("loginOk=%s, homeUrl=%s, failDescription=%s", loginOk, homeUrl, failDescription);
     if(loginOk) :
-        homeUrl = retInfo;
         logging.debug("%s login Renren OK, returned homeUrl=%s", username, homeUrl);
     else :
-        logging.error("%s login Renren fail for %s", username, retInfo);
-        logging.info("友情提示：如果出现的错误，是类似于'您输入的验证码不正确'的错误，那么请自行通过浏览器手动登陆人人网，然后再运行此脚本，应该就可以消除这类错误提示了。");
+        logging.error("%s login Renren fail for %s", username, failDescription);
+        #之前通过重新在网页登陆人人后，此脚本中，即可消除此验证码错误的问题了
+        #但是现在 2012-09-04,好像此方法已失效，登陆时，必须输入验证码
+        
+        #如果出现验证码错误，请重新运行此脚本
+
+        # foundFailcode = re.search(r"&failCode=(?P<failCode>\d+)", homeUrl);
+        # logging.debug("foundFailcode=%s", foundFailcode);
+        # if(foundFailcode):
+            # failCode = foundFailcode.group("failCode");
+            # #failCode=4","failDescription":"您的用户名和密码不匹配"
+            # #failCode=512","failDescription":"您输入的验证码不正确"
+            # if((failCode=="512") and (failDescription==u"您输入的验证码不正确")):
+                # #try re-login, need verify code
+                # logging.debug("now will try re-login renren.");
     
     if(loginOk):
         resp = crifanLib.getUrlResponse(homeUrl);
