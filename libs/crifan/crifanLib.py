@@ -14,6 +14,9 @@ crifan's common functions, implemented by Python.
 1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v2.4]
+1. add another manuallyDownloadFile with headerDict support
+
 [v2.3]
 1. add removeSoupContentsTagAttr, findFirstNavigableString, soupContentsToUnicode
 
@@ -70,7 +73,8 @@ import random;
 __VERSION__ = "v2.3";
 
 gConst = {
-    'userAgentIE9'      : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
+    'constUserAgent' : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
+    #'constUserAgent' : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:15.0) Gecko/20100101 Firefox/15.0.1",
     
     # also belong to ContentTypes, more info can refer: http://kenya.bokee.com/3200033.html
     # here use Tuple to avoid unexpected change
@@ -115,6 +119,7 @@ def genSufList() :
 
 #------------------------------------------------------------------------------
 # get current time's timestamp
+# 1351670162
 def getCurTimestamp() :
     return datetimeToTimestamp(datetime.now());
 
@@ -736,7 +741,7 @@ def downloadFile(fileUrl, fileToSave, needReport = False) :
 
 #------------------------------------------------------------------------------
 # manually download fileUrl then save to fileToSave
-def manuallyDownloadFile(fileUrl, fileToSave) :
+def manuallyDownloadFile(fileUrl, fileToSave):
     isDownOK = False;
     downloadingFile = '';
 
@@ -752,6 +757,26 @@ def manuallyDownloadFile(fileUrl, fileToSave) :
             respHtml = getUrlRespHtml(realUrl, useGzip=False, timeout=gConst['defaultTimeout']);
             
             isDownOK = saveBinDataToFile(respHtml, fileToSave);
+        else :
+            print "Input download file url is NULL";
+    except urllib.ContentTooShortError(msg) :
+        isDownOK = False;
+    except :
+        isDownOK = False;
+
+    return isDownOK;
+
+#------------------------------------------------------------------------------
+# manually download fileUrl then save to fileToSave, with header support
+def manuallyDownloadFile(fileUrl, fileToSave, headerDict):
+    isDownOK = False;
+    downloadingFile = '';
+
+    try :
+        if fileUrl :
+            respHtml = getUrlRespHtml(fileUrl, headerDict=headerDict,useGzip=False, timeout=gConst['defaultTimeout']);
+            if(respHtml):
+                isDownOK = saveBinDataToFile(respHtml, fileToSave);
         else :
             print "Input download file url is NULL";
     except urllib.ContentTooShortError(msg) :
@@ -782,7 +807,7 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
             req.add_header(key, headerDict[key]);
 
     defHeaderDict = {
-        'User-Agent'    : gConst['userAgentIE9'],
+        'User-Agent'    : gConst['constUserAgent'],
         'Cache-Control' : 'no-cache',
         'Accept'        : '*/*',
         'Connection'    : 'Keep-Alive',

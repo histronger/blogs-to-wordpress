@@ -3,15 +3,18 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v13.9
+版本：     v16.0
 作者：     crifan
-联系方式： http://www.crifan.com/contact_me/
+联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【详细信息】
 BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，Blogbus博客大巴等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
+BlogsToWordPress使用前必读
+http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/before_use/
+
 BlogsToWordPress 的用法的举例说明 
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_example/
 
@@ -21,6 +24,11 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v16.0]
+1. add BlogTianya support
+2. add BlogDiandian support
+3. fix path combile bug in mac, add logRuntimeInfo
+
 [v13.9]
 1. BlogRenren add captcha for login
 
@@ -107,13 +115,15 @@ import BlogRenren;
 import BlogCsdn;
 import BlogSohu;
 import BlogBlogbus;
+import BlogTianya;
+import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v13.9";
+__VERSION__ = "v16.0";
 
 gConst = {
-    'generator'         : "http://www.crifan.com",
+    'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
     'tailUni'           : u"""
 
 </channel>
@@ -172,6 +182,18 @@ gConst = {
             'blogModule'        : BlogBlogbus,
             'mandatoryIncStr'   : ".blogbus.com",
             'descStr'           : "Blogbus Blog",
+        },
+
+        'BlogTianya' : {
+            'blogModule'        : BlogTianya,
+            'mandatoryIncStr'   : "blog.tianya.cn",
+            'descStr'           : "Tianya Blog",
+        },
+
+        'BlogDiandian' : {
+            'blogModule'        : BlogDiandian,
+            'mandatoryIncStr'   : ".diandian.com",
+            'descStr'           : "Diandian Qing Blog",
         },
     } ,
 };
@@ -479,7 +501,7 @@ def processPhotos(blogContent):
             # if matched, result for findall() is a list when no () in pattern
             matchedList = re.findall(allUrlPattern, blogContent);
             logging.debug("Len(matchedList)=%d", len(matchedList));
-            #print "matchedList=",matchedList;
+            logging.debug("matchedList=%s", matchedList);
             if matchedList :
                 nonOverlapList = crifanLib.uniqueList(matchedList); # remove processed
                 # remove processed and got ones that has been processed
@@ -534,8 +556,7 @@ def processPhotos(blogContent):
                                     # no suf, then set to jpg
                                     suffix = 'jpg';
                                 suffix = suffix.lower();
-                                
-                                # print "picUrl=",picUrl
+
                                 # print "filename=",filename;
                                 # print "suffix=",suffix
                                 # print "picInfoDict['fields']=",picInfoDict['fields'];
@@ -546,18 +567,21 @@ def processPhotos(blogContent):
                                 # indeed is pic, process it
                                 #(picIsValid, errReason) = curPicCfgDict['isFileValid'](curUrl);
                                 (picIsValid, errReason) = curPicCfgDict['isFileValid'](picInfoDict);
-                                #print "picIsValid=",picIsValid;
+                                #print "picIsValid=%s,errReason=%s"%(picIsValid,errReason);
                                 if picIsValid :
                                     # 1. prepare info
                                     nameWithSuf = filename + '.' + suffix;
                                     curPath = os.getcwd();
-                                    dstPathOwnPic = curPath + '\\' + gVal['blogUser'] + '\\pic';
+                                    #dstPathOwnPicOld = curPath + '\\' + gVal['blogUser'] + '\\pic';
+                                    dstPathOwnPic = os.path.join(curPath, gVal['blogUser'], 'pic');
+                                    
                                     # 2. create dir for save pic
                                     if (os.path.isdir(dstPathOwnPic) == False) :
                                         os.makedirs(dstPathOwnPic); # create dir recursively
                                         logging.info("Create dir %s for save downloaded pictures of own site", dstPathOwnPic);
                                     if gCfg['processOtherPic'] == 'yes' :
-                                        dstPathOtherPic = dstPathOwnPic + '\\' + gConst['othersiteDirName'];
+                                        #dstPathOtherPic = dstPathOwnPic + '\\' + gConst['othersiteDirName'];
+                                        dstPathOtherPic = os.path.join(dstPathOwnPic, gConst['othersiteDirName']);
                                         if (os.path.isdir(dstPathOtherPic) == False) :
                                             os.makedirs(dstPathOtherPic); # create dir recursively
                                             logging.info("Create dir %s for save downloaded pictures of other site", dstPathOtherPic);
@@ -565,7 +589,8 @@ def processPhotos(blogContent):
                                     if(picInfoDict['isSelfBlog']):
                                         #print "++++ yes is self blog pic";
                                         newPicUrl = gCfg['picPathInWP'] + '/' + nameWithSuf;
-                                        dstPicFile = dstPathOwnPic + '\\' + nameWithSuf;
+                                        #dstPicFile = dstPathOwnPic + '\\' + nameWithSuf;
+                                        dstPicFile = os.path.join(dstPathOwnPic, nameWithSuf);
                                     else :
                                         # is othersite pic
                                         #print "--- is other pic";
@@ -574,7 +599,8 @@ def processPhotos(blogContent):
                                             newNameWithSuf = curPicCfgDict['genNewOtherPicName'](picInfoDict) + '.' + suffix;
                                             #print "newNameWithSuf=",newNameWithSuf;
                                             newPicUrl = gCfg['otherPicPathInWP'] + '/' + newNameWithSuf;
-                                            dstPicFile = dstPathOtherPic + '\\' + newNameWithSuf;
+                                            #dstPicFile = dstPathOtherPic + '\\' + newNameWithSuf;
+                                            dstPicFile = os.path.join(dstPathOtherPic, newNameWithSuf);
                                         else :
                                             dstPicFile = ''; # for next not download
                                             #newPicUrl = curUrl
@@ -1006,6 +1032,7 @@ def generateHeader():
 
 <channel>
     <title>${blogTitle}</title>
+    <!-- ${blogEntryUrl} -->
     <link>http://localhost</link>
     <description>${blogDiscription}</description>
     <pubDate>${blogPubDate}</pubDate>
@@ -1025,7 +1052,7 @@ def generateHeader():
     </wp:author>
 
 """)
-#need   nowTime, blogTitle, blogDiscription, blogUser, generator
+#need   nowTime, blogTitle, blogEntryUrl, blogDiscription, blogUser, generator
 #       authorDisplayName, authorFirstName, authorLastName, blogPubDate
 
     # Note: some field value has been set before call this func
@@ -1033,6 +1060,7 @@ def generateHeader():
     blogInfoDict['authorFirstName'] = packageCDATA("");
     blogInfoDict['authorLastName'] = packageCDATA("");
     blogInfoDict['blogTitle'] = saxutils.escape(blogInfoDict['blogTitle']);
+    blogInfoDict['blogEntryUrl'] = blogInfoDict['blogEntryUrl'];
     blogInfoDict['blogDiscription'] = saxutils.escape(blogInfoDict['blogDiscription']);
     blogInfoDict['generator'] = gConst['generator'];
     wxrHeaderUni = wxrHeaderT.substitute(blogInfoDict);
@@ -1274,7 +1302,7 @@ def getBlogHeadInfo(blogInfoDic) :
     global gConst;
     global gVal;
 
-    blogInfoDic['blogURL'] = gVal['blogEntryUrl'];
+    blogInfoDic['blogEntryUrl'] = gVal['blogEntryUrl'];
     (blogInfoDic['blogTitle'], blogInfoDic['blogDiscription']) = extractBlogTitAndDesc(gVal['blogEntryUrl']);
     logging.debug('Blog title: %s', blogInfoDic['blogTitle']);
     logging.debug('Blog description: %s', blogInfoDic['blogDiscription']);
@@ -1387,7 +1415,7 @@ def initialization(inputUrl):
     logging.debug("Extracting blog user from url=%s", inputUrl);
     
     # 1. check blog provider
-    checkBlogProvider(inputUrl);
+    checkBlogProviderFromUrl(inputUrl);
     
     # 2. extract blog user and blog entry url from input url
     (extractOK, extractedBlogUser, generatedBlogEntryUrl) = extractBlogUser(inputUrl);
@@ -1434,10 +1462,22 @@ def generateWxrValidUsername():
     logging.info("Generated WXR safe username is %s", gVal['wxrValidUsername']);
 
 #------------------------------------------------------------------------------
+def logRuntimeInfo():
+    logging.info("Current runtime info:");
+    logging.info("Paramenters       : %s", sys.argv);
+    logging.info("Python version    : %s", sys.version_info);
+    logging.info("Windows version   : %s", sys.getwindowsversion());
+    logging.info("Default encoding  : %s", sys.getdefaultencoding());
+    logging.info("Current path      : %s", sys.prefix);
+    return;
+
+#------------------------------------------------------------------------------
 def main():
     global gVal
     global gCfg
 
+    logRuntimeInfo();
+    
     # 0. main procedure begin
     parser = OptionParser();
     parser.add_option("-s","--srcUrl",action="store", type="string",dest="srcUrl",help=u"博客入口地址。例如: http://againinput4.blog.163.com, http://hi.baidu.com/recommend_music/。程序会自动找到你的博客的（最早发布的）第一个帖子，然后开始处理。");
@@ -1684,8 +1724,51 @@ def callBlogFunc(funcToCall, *paraList):
         return;
 
 #------------------------------------------------------------------------------
+# check whether is diandian blog url
+def checkForBlogDiandian(inputUrl, respHtml) :
+    isBlogDiandian = False;
+
+    # some special diandian blog, self domain, not http://xxx.diandian.com
+    #http://www.zoushijie.com/
+    #http://blog.nuandao.com
+    #http://nosta1gie.com
+    #http://www.sankin77.com
+    #http://www.zoushijie.com/post/2012-09-22/40038845472
+
+    #method 1:
+    #<body class="demo_jjl page_1 has_2_pages"><iframe ... id="diandian_controls" ... src="http://www.diandian.com/n/common/toolbar2/zousj"></iframe>
+    foundDiandian = re.search('<iframe.+?id="diandian_controls".+?</iframe>', respHtml);
+    #method 2:
+    #foundDiandian = re.search(u"请不要在 http://www\.diandian\.com 以外的地方输入你的点点密码！".encode("UTF-8"), respHtml);
+
+    logging.debug("foundDiandian=%s", foundDiandian);
+    if(foundDiandian):
+        isBlogDiandian = True;
+
+    return isBlogDiandian;
+#------------------------------------------------------------------------------
+# check blog provider from url type
+def checkBlogProviderFromUrlType(inputUrl) :
+    (foundBlogProvider, blogStr) = (False, "Invalid Blog Provider");
+
+    #try parse url to find reald blog provider
+    logging.debug("Inputed url=%s", inputUrl);
+    #check whether is DianDian Blog
+    respHtml = crifanLib.getUrlRespHtml(inputUrl);
+    logging.debug("inputUrl=%s, respHtml=%s", inputUrl, respHtml);
+    foundBlogProvider = checkForBlogDiandian(inputUrl, respHtml);
+    if(foundBlogProvider):
+        (foundBlogProvider, blogStr) = (True, "BlogDiandian");
+    
+    # if(not foundBlogProvider):
+        # # check for other blog provider
+        
+    logging.debug("foundBlogProvider=%s, blogStr=%s", foundBlogProvider, blogStr);
+    
+    return (foundBlogProvider, blogStr);
+#------------------------------------------------------------------------------
 # check the blog provider from input url
-def checkBlogProvider(inputUrl) :
+def checkBlogProviderFromUrl(inputUrl) :
     foundValidBlog = False;
     for eachBlogStr in gConst['blogs'].keys() :
         eachBlog = gConst['blogs'][eachBlogStr];
@@ -1698,8 +1781,12 @@ def checkBlogProvider(inputUrl) :
             break;
 
     if(not foundValidBlog) :
-        logging.error("Can not find out blog provider from %s", inputUrl);
-        sys.exit(2);
+        (foundBlogProvider, blogStr) = checkBlogProviderFromUrlType(inputUrl);
+        if(foundBlogProvider):
+            gVal['blogProvider'] = blogStr;
+        else:
+            logging.error("Can not find out blog provider from %s", inputUrl);
+            sys.exit(2);
 
 ################################################################################
 # Common Functions for different blog provider: baidu/netease(163)/Sina
@@ -1782,7 +1869,7 @@ if __name__=="__main__":
     # for : python xxx.py -s yyy    # -> sys.argv[0]=xxx.py
     # for : xxx.py -s yyy           # -> sys.argv[0]=D:\yyy\zzz\xxx.py
     scriptSelfName = crifanLib.extractFilename(sys.argv[0]);
-
+    
     logging.basicConfig(
                     level    = logging.DEBUG,
                     format   = 'LINE %(lineno)-4d  %(levelname)-8s %(message)s',

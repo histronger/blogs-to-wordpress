@@ -1848,6 +1848,7 @@ def loginBlog(username, password) :
 
         loginBaiduUrl = "https://passport.baidu.com/v2/api/?login";
         
+        #space/blog page login:
         # charset=UTF-8&
         # codestring=&
         # token=4eb67e297f7061127b93d79a935aa3f9&
@@ -1860,6 +1861,24 @@ def loginBlog(username, password) :
         # tpl=qing&
         # username=againinput4&
         # password=xxxxxx&
+        # verifycode=&
+        # mem_pass=on
+        
+        #main page login
+        # ppui_logintime=6765&
+        # charset=utf-8&
+        # codestring=&
+        # token=d143ee580b35a8f40f46e9aeae5061a6&
+        # isPhone=false&
+        # index=0&
+        # u=&
+        # safeflg=0&
+        # staticpage=http%3A%2F%2Fwww.baidu.com%2Fcache%2Fuser%2Fhtml%2Fjump.html&
+        # loginType=1&
+        # tpl=mn&
+        # callback=parent.bdPass.api.login._postCallback&
+        # username=againinput4&
+        # password=limaolin&
         # verifycode=&
         # mem_pass=on
 
@@ -2112,12 +2131,15 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
             errInfo = "Fail to find window.qBdsToken";
             return (modifyOk, errInfo);
 
-        titleUtf8 = infoDict['title'].encode("UTF-8");
-        logging.debug("titleUtf8=%s", titleUtf8);
-        newPostContentUtf8 = newPostContentUni.encode("UTF-8");
-        #logging.debug("newPostContentUtf8=%s", newPostContentUtf8);
+        contentEncoding = "UTF-8";
+        #contentEncoding = "GB18030";
+        titleEncoded = infoDict['title'].encode(contentEncoding);
+        logging.debug("titleEncoded=%s", titleEncoded);
+        newPostContentEncoded = newPostContentUni.encode(contentEncoding);
+        logging.debug("newPostContentEncoded=%s", newPostContentEncoded);
         refer = url;
-        multimedia = "undefined#undefined#undefined#undefined";
+        #multimedia = "undefined#undefined#undefined#undefined";
+        multimedia = "";
         
         # title=测试公开日志
         # content=<p>这个是公开的日志<%2Fp><p>发帖时，设置为“所有人可见”的那种。<%2Fp><p>111%26nbsp;测试更改内容<%2Fp>
@@ -2130,8 +2152,8 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
         # private1=0
         # qing_request_source=
         postDict = {
-            "title"     : titleUtf8,
-            "content"   : newPostContentUtf8,
+            "title"     : titleEncoded,
+            "content"   : newPostContentEncoded,
             "private"   : "0", # tmp set all post to non-private == public
             "private1"  : "0", # ???
             "imgnum"    : "0", #tmp not support photo/video type post, only support text type post
@@ -2141,8 +2163,15 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
             "multimedia[]"          : multimedia, #tmp not support multimedia(photo/audio/video)
             "qing_request_source"   : "",
         }
+        
+        
+        headerDict = {
+            'x-requested-with'  : "XMLHttpRequest",
+            'Referer'           : "http://hi.baidu.com/pub/show/modifytext?qbid="+qbid,
+        }
+        
         modifyTextUrl = "http://hi.baidu.com/pub/submit/modifytext";
-        respJson = crifanLib.getUrlRespHtml(modifyTextUrl, postDict);
+        respJson = crifanLib.getUrlRespHtml(modifyTextUrl, postDict, headerDict);
         logging.debug("modifyPost respJson=%s", respJson);
         
         #{"errorNo" : "0","errorMsg" : "","data": [  ]}
@@ -2152,12 +2181,13 @@ def modifySinglePost(newPostContentUni, infoDict, inputCfg):
             errorNo = foundRespJson.group("errorNo");
             errorMsg = foundRespJson.group("errorMsg");
             logging.debug("errorNo=%s, errorMsg=%s", errorNo, errorMsg);
+            errorMsgUni = errorMsg.decode("UTF-8");
             if(errorNo == "0"):
                 modifyOk = True;
                 errInfo = "Modify post OK";
             else:
                 modifyOk = False;
-                errInfo = errorMsg;
+                errInfo = errorMsgUni;
                 return (modifyOk, errInfo);
         else:
             modifyOk = False;
