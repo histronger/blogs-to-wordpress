@@ -8,7 +8,7 @@
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【详细信息】
-BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，Blogbus博客大巴等博客搬家到WordPress
+BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，Blogbus博客大巴，天涯博客，点点轻博客等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
@@ -1506,7 +1506,7 @@ def main():
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
     #Change Here If Add New Blog Provider Support
-    logging.info(u"  BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，博客大巴Blogbus等博客搬家到WordPress");
+    logging.info(u"  BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，博客大巴Blogbus，天涯博客，点点轻博客等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
     
