@@ -4,6 +4,11 @@
 
 For BlogsToWordpress, this file contains the functions for Csdn Blog.
 
+【版本历史】
+[v1.1]
+1. csdn: Can not find the first link for http://blog.csdn.net/v_JULY_v, error=Unknown error! -> just csdn sometime down, use script for another time
+2. fixbug: get next link from url relation dict fail for url lower case not match
+
 [TODO]
 
 """
@@ -19,13 +24,13 @@ from datetime import datetime,timedelta;
 from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
 import crifanLib;
-import cookielib;
+#import cookielib;
 #from xml.sax import saxutils;
 import json; # New in version 2.6.
 import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.0";
+__VERSION__ = "v1.1";
 
 gConst = {
     'spaceDomain'  : 'http://blog.csdn.net',
@@ -292,14 +297,15 @@ def fetchUrlList(pageNum):
     (totalUrlNum, totalPageNum, urlList) = (0, 0, []);
     
     articleListUrl = gVal['blogEntryUrl'] + "/article/list/" + str(pageNum);
+    logging.debug("from %s to extract url list", articleListUrl);
     respHtml = crifanLib.getUrlRespHtml(articleListUrl);
-    #logging.debug("for extract real url next link relation, %s retrn html=\n%s", articleListUrl, respHtml);
-    
+
     #http://blog.csdn.net/aomandeshangxiao/article/list/2
     # <div id="papelist" class="pagelist">
     # <span> 106条数据  共3页</span><strong>1</strong> <a href="/aomandeshangxiao/article/list/2">2</a> <a href="/aomandeshangxiao/article/list/3">3</a> <a href="/aomandeshangxiao/article/list/2">下一页</a> <a href="/aomandeshangxiao/article/list/3">尾页</a> 
     # </div>
     foundPageNum = re.search("<span>\s*?(?P<totalUrlNum>\d+)条数据\s+?共(?P<totalPageNum>\d+)页</span>", respHtml);
+    logging.debug("foundPageNum=%s", foundPageNum);
     if(foundPageNum):
         totalUrlNum = foundPageNum.group("totalUrlNum");
         totalUrlNum = int(totalUrlNum);
@@ -316,6 +322,43 @@ def fetchUrlList(pageNum):
             #print "eachUrl=",eachUrl;
             urlList.append(eachUrl);
 
+    if(not foundPageNum):
+        #logging.debug("Not extract totalUrlNum from respHtml=\n%s", respHtml);
+        #http://blog.csdn.net/qq1059458376/article/list/1
+        
+            # <div class="list_item article_item">
+
+                # <div class="article_title">
+
+            # <span class="ico ico_type_Original"></span>
+
+            # <h3>
+
+                # <span class="link_title"><a href="/qq1059458376/article/details/8145497">
+
+                # 50个Android开发人员必备UI效果源码[转载]
+
+                # </a></span>
+
+            # </h3>
+
+        # </div>
+        #...
+        # </div>
+        soup = htmlToSoup(respHtml);
+        foundAllListItem = soup.findAll(name="div", attrs={"class":"list_item article_item"});
+        logging.debug("foundAllListItem=%s", foundAllListItem);
+        if(foundAllListItem):
+            for eachListItem in foundAllListItem:
+                foundLinkTitle = eachListItem.find(name="span", attrs={"class":"link_title"});
+                logging.debug("foundLinkTitle=%s", foundLinkTitle);
+                if(foundLinkTitle):
+                    linkTitleA = foundLinkTitle.a;
+                    linkTitleAHref = linkTitleA['href'];
+                    fullLink = gConst['spaceDomain'] + linkTitleAHref;
+                    logging.debug("fullLink=%s", fullLink);
+                    urlList.append(fullLink);
+        
     logging.debug("for pageNum=%d, extracted info: totalUrlNum=%d, totalPageNum=%d, urlList=%s", pageNum, totalUrlNum, totalPageNum, urlList);
     
     return (totalUrlNum, totalPageNum, urlList);
@@ -326,16 +369,25 @@ def getNextLinkFromDict(curPemaLink):
     nextPermaLink = "";
     
     validPermaLink = curPemaLink;
+    #remove last / if exist, 
+    #    http://blog.csdn.net/v_JULY_v/article/details/5934051/
+    # -> http://blog.csdn.net/v_JULY_v/article/details/5934051
     if(curPemaLink[-1] == "/"):
         validPermaLink = curPemaLink[:-1];
-
+    
+    #   http://blog.csdn.net/v_JULY_v/article/details/5934051
+    # ->http://blog.csdn.net/v_july_v/article/details/5934051
+    validPermaLink = validPermaLink.lower();
+    
     if(validPermaLink in gVal['urlRelation']['nextLinkRelation']) :
+        logging.debug("validPermaLink=%s is in nextLinkRelation", validPermaLink);
         nextPermaLink = gVal['urlRelation']['nextLinkRelation'][validPermaLink];
     else:
+        logging.debug("validPermaLink=%s is NOT in nextLinkRelation", validPermaLink);
         nextPermaLink = "";
-        
+    logging.debug("curPemaLink=%s, nextPermaLink(get from url relation dict)=%s", curPemaLink, nextPermaLink);
     return nextPermaLink;
-    
+
 #------------------------------------------------------------------------------
 # find next permanent link of current post
 def findNextPermaLink(url, html) :
@@ -370,20 +422,23 @@ def findNextPermaLink(url, html) :
                 #reversedPageUrlList = allPageUrlList.reverse(); # -> is None !!!
                 allPageUrlList.reverse(); # -> is OK, the self is reversed !!!
                 reversedPageUrlList = allPageUrlList;
-                #print "reversedPageUrlList=",reversedPageUrlList;
+                logging.debug("reversedPageUrlList=%s", reversedPageUrlList);
                 #print "type(reversedPageUrlList)=",type(reversedPageUrlList);
                 urlListLen = len(reversedPageUrlList);
-                #print "urlListLen=",urlListLen;
+                logging.debug("urlListLen=%d", urlListLen);
                 for i in range(urlListLen):
                     curPemaLink = reversedPageUrlList[i];
                     if(i != (urlListLen - 1)):
                         nextPermaLink = reversedPageUrlList[i + 1];
                     else:
                         nextPermaLink = "";
-                        
+
+                    curPemaLink = curPemaLink.lower();
+                    nextPermaLink = nextPermaLink.lower();
                     gVal['urlRelation']['nextLinkRelation'][curPemaLink] = nextPermaLink;
 
             gVal['urlRelation']['inited'] = True;
+            logging.debug("gVal['urlRelation']=%s", gVal['urlRelation']);
         else:
             logging.debug("has inited the url next perma link relation dict");
     
