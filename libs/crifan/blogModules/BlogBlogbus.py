@@ -6,6 +6,11 @@ For BlogsToWordpress, this file contains the functions for Blogbus Blog.
 
 [TODO]
 
+[History]
+[v1.2]
+1. fix bugs for extract title and date time string
+
+
 """
 
 import os;
@@ -26,7 +31,7 @@ import json; # New in version 2.6.
 #import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.0";
+__VERSION__ = "v1.2";
 
 gConst = {
     'spaceDomain'  : "",
@@ -217,67 +222,156 @@ def extractTitle(url, html):
         if(foundPostHeader):
             h2 = foundPostHeader.h2;
             h3 = foundPostHeader.h3;
-            #print "h2=",h2;
             
             logging.debug("h2.contents=%s", h2.contents);
-            
-            #print "type(h2.contents[0])=",type(h2.contents[0]);
-            #print "h2.contents[0].string=",h2.contents[0].string;
-            #print "type(h2.contents[0].string)=",type(h2.contents[0].string);
-            
-            #print "type(h2.contents[0])=",type(h2.contents[0]);
-            #print "type(h2.contents[1])=",type(h2.contents[1]);
-            #print "type(h2.contents[2])=",type(h2.contents[2]);
-            #print "isinstance(h2.contents[1], BeautifulSoup.NavigableString)=",isinstance(h2.contents[1], BeautifulSoup.NavigableString);
 
-            #print "h2.string=",h2.string;
-            #if(h2.string):
-            #if(BeautifulSoup.NavigableString == type(h2.contents[0])):
-            #if(isinstance(h2.contents[0], BeautifulSoup.NavigableString)):
+            if(h2):
+                #following must has h2
+                logging.debug("has h2");
+                
+                if(h3):
+                    logging.debug("both has h2 and h3");
                     
-            firstNaviStr = crifanLib.soupContentsToUnicode(h2.contents);
-            logging.debug("h2.contents's firstNaviStr=%s", firstNaviStr);
-            if(firstNaviStr):
-                firstNaviStr = firstNaviStr.replace("\n", "");
-                firstNaviStr = firstNaviStr.replace("\r", "");
-                logging.debug("after remove CR LF, firstNaviStr=%s", firstNaviStr);
-                if(firstNaviStr):
-                    #http://fsj.blogbus.com/logs/46697205.html
-                    # <div class="postHeader">
-                        # <h3>2009-09-18</h3>
-                        # <h2>Uniqlo</h2>
-                    # </div>
+                    h2Span = h2.span;
+                    h2A = h2.a;
                     
-                    #http://littlebasin.blogbus.com/logs/1379808.html
-                    # <div class="postHeader">
-                    #       <h3>2005-08-22</h3>
-                    #       <h2>第一篇<span class='category'> - [<a href='/c1396918/'>随笔</a>]</span></h2>
-                    # </div>
-                    
-                    #http://lynnchon.blogbus.com/logs/106189839.html
-                    # <div class="postHeader">
-                        # <h3>2011-02-21</h3>
-                        # <h2>电话是锅血糯米粥<span class='category'> - [<a href='/c3259385/'>又活动呀~~~</a>]</span></h2>
-                        # <div class="tags">Tag：<a href="/tag/情侣电话粥/">情侣电话粥</a> </div>
-                    # </div>
-                    
-                    #http://guthrun.blogbus.com/logs/30794012.html
-                    # <div class="postHeader">
-                        # <div class="c1"></div><div class="c2"></div><div class="c3"></div><div class="c4"></div>
-                        # <h2><span class="date">2008-10-30</span>四分之一世纪<span class='category'> - [<a href='/c1982069/'>电影·阅读</a>]</span></h2>
-                        # <div class="clear"></div>
-                    # </div>
+                    if(h2Span and h2A):
+                        logging.debug("both has h2 and h3; both has h2 span and h2 a");
 
-                    #found title string
-                    titleUni = firstNaviStr;
-                    logging.debug("titleUni=%s", titleUni);
+                        #http://littlebasin.blogbus.com/logs/1379808.html
+                        # <div class="postHeader">
+                        #       <h3>2005-08-22</h3>
+                        #       <h2>第一篇<span class='category'> - [<a href='/c1396918/'>随笔</a>]</span></h2>
+                        # </div>
+                        
+                        #http://lynnchon.blogbus.com/logs/106189839.html
+                        # <div class="postHeader">
+                            # <h3>2011-02-21</h3>
+                            # <h2>电话是锅血糯米粥<span class='category'> - [<a href='/c3259385/'>又活动呀~~~</a>]</span></h2>
+                            # <div class="tags">Tag：<a href="/tag/情侣电话粥/">情侣电话粥</a> </div>
+                        # </div>
+
+                        #http://starrysummernight.blogbus.com/logs/100848611.html
+                        # <div class="postHeader">
+                            # <h2>儿童节的成人礼<span class='category'> - [<a href='/c3822867/'>思维后花园</a>]</span></h2>
+                            # <h3>2007-06-01</h3>
+                        # </div>
+
+                        h2SoupUniStr = crifanLib.soupContentsToUnicode(h2.contents);
+                        logging.debug("h2SoupUniStr=%s", h2SoupUniStr);
+                        h2UniNoSpan = re.sub("<span[^<>]*?>.+?</span>", "", h2SoupUniStr);
+                        logging.debug("h2UniNoSpan=%s", h2UniNoSpan);
+                        
+                        titleUni = h2UniNoSpan;
+                        
+                    elif((not h2Span) and (not h2A)):
+                        logging.debug("both has h2 and h3; no h2 span, no h2 a");
+
+                        #http://fsj.blogbus.com/logs/46697205.html
+                        # <div class="postHeader">
+                            # <h3>2009-09-18</h3>
+                            # <h2>Uniqlo</h2>
+                        # </div>
+
+                        h2String = h2.string;
+                        logging.debug("h2String=%s", h2String);
+                        if(h2String):
+                            logging.debug("both has h2 and h3; no h2 span, no h2 a; h2 string not null");
+                            titleUni = h2String;
+                        else:
+                            logging.debug("both has h2 and h3; no h2 span, no h2 a; but h2 string is null");
+                        
+                            #http://kenleung.blogbus.com/logs/219268309.html
+                            # <div class="postHeader"><br>
+                                # <h3>鐵盒里的影劇院</h3>
+                                # <h2></h2>
+                            # </div>
+                            h3String = h3.string;
+                            logging.debug("h3String=%s", h3String);
+                            if(h3String):
+                                logging.debug("both has h2 and h3; no h2 span, no h2 a; h2 string is null; h3 string not null");
+                                titleUni = h3String;
+                            else:
+                                logging.error("tmp not support: both has h2 and h3; no h2 span, no h2 a; h2 string is null; h3 string also null");
+                    elif((not h2Span) and h2A):
+                        logging.debug("both has h2 and h3; no h2 span, has h2 a");
+
+                        #http://uk916.blogbus.com/logs/163734653.html
+                        # <div class="postHeader">
+                            # <h2>海寂&nbsp;&nbsp;[ <a href='/c4044389/'>摄影习作</a> ]</h2>
+                            # <h3 class="date">2011-09-27</h3>
+                        # </div>
+                        h2SoupUniStr = crifanLib.soupContentsToUnicode(h2.contents);
+                        logging.debug("h2SoupUniStr=%s", h2SoupUniStr);
+                        h2UniNoA = re.sub("\[\s*<a.*?>.+?</a>\s*\]", "", h2SoupUniStr);
+                        logging.debug("h2UniNoA=%s", h2UniNoA);
+                        h2UniNoNbsp = re.sub("&nbsp;", "", h2UniNoA);
+                        logging.debug("h2UniNoNbsp=%s", h2UniNoNbsp);
+                        titleUni = h2UniNoNbsp;                        
+                    else:
+                        logging.error("tmp not support: h2Span=%s, h2A=%s", h2Span, h2A);
+                else:
+                    logging.debug("has h2, no h3");
                     
-                    # do some post process
+                    h2A = h2.a;
+                    h2Span = h2.span;
+
+                    if(h2Span and h2A):
+                        logging.debug("has h2, no h3; both has h2 span and h2 a");
+                        #http://guthrun.blogbus.com/logs/30794012.html
+                        # <div class="postHeader">
+                            # <div class="c1"></div><div class="c2"></div><div class="c3"></div><div class="c4"></div>
+                            # <h2><span class="date">2008-10-30</span>四分之一世纪<span class='category'> - [<a href='/c1982069/'>电影·阅读</a>]</span></h2>
+                            # <div class="clear"></div>
+                        # </div>
+                        
+                        h2SoupUniStr = crifanLib.soupContentsToUnicode(h2.contents);
+                        logging.debug("h2SoupUniStr=%s", h2SoupUniStr);
+                        h2UniNoSpan = re.sub("<span[^<>]*?>.+?</span>", "", h2SoupUniStr);
+                        logging.debug("h2UniNoSpan=%s", h2UniNoSpan);
+                        
+                        titleUni = h2UniNoSpan;
+                    elif((not h2Span) and h2A):
+                        logging.debug("has h2, no h3; no h2 span, has h2 a");
                     
-                    # remove appended date string
-                    foundAppendDateStr = re.search(u" - [\w]{3,4} \d{1,2}, \d{4}$", titleUni);
-                    logging.debug("foundAppendDateStr=%s", foundAppendDateStr);
-                    if(foundAppendDateStr):
+                        #http://princessbusy.blogbus.com/logs/165961786.html
+                        # <div class="postHeader">
+                         
+                            # <h2><a href="http://princessbusy.blogbus.com/logs/165961786.html ">天府之國，你的寬窄巷子</a></h2>
+                         
+                        # </div>
+                        
+                        #http://janexyy.blogbus.com/logs/105359907.html
+                        # <div class="postHeader">
+                            # <h2>
+                                # <a href="http://janexyy.blogbus.com/logs/105359907.html" title="转载时请复制此超链接标明文章原始出处和作者信息">我们，细水长流</a>
+                            # </h2>
+                        # </div>
+                        h2AString = h2.a.string;
+                        logging.debug("h2AString=%s", h2AString);
+                        
+                        titleUni = h2AString;
+                    elif((not h2Span) and (not h2A)):
+                        #http://tianshizhu.blogbus.com/logs/10327610.html
+                        # <div class="postHeader">
+                            # <h2>小忧的留言板</h2>
+                        # </div>
+                        h2String = h2.string;
+                        logging.debug("h2String=%s", h2String);
+                        
+                        titleUni = h2String;
+                    else:
+                        logging.error("tmp not support: has h2, no h3; h2A=%s, h2Span=%s", h2A, h2Span);
+            else:
+                logging.error("under postHeader no h2");
+
+                foundInnerBox = foundPostHeader.find(attrs={"class":"innerBox"});
+                logging.debug("foundInnerBox=%s", foundInnerBox);
+                if(foundInnerBox):
+                    innerBoxh2 = foundInnerBox.h2;
+                    logging.debug("innerBoxh2=%s", innerBoxh2);
+                    
+                    if(innerBoxh2):
                         #http://gogodoll.blogbus.com/logs/210877066.html
                         # <div class="postHeader">
                             # <div class="innerBox">
@@ -286,41 +380,20 @@ def extractTitle(url, html):
                             # </div>
                         # ......
                         # </div>
-                        appendedDateStr = foundAppendDateStr.group(0);
-                        titleUni = titleUni.replace(appendedDateStr, "");
-                        logging.debug("after remove date, titleUni=%s", titleUni);
+                        
+                        innerBoxh2Str = innerBoxh2.string;
+                        logging.debug("innerBoxh2Str=%s", innerBoxh2Str);
+                        
+                        if(innerBoxh2Str):
+                            # remove appended date string
+                            foundAppendDateStr = re.search(u" - [\w]{3,4} \d{1,2}, \d{4}$", innerBoxh2Str);
+                            logging.debug("foundAppendDateStr=%s", foundAppendDateStr);
+                            appendedDateStr = foundAppendDateStr.group(0);
+                            innerBoxh2StrNoDate = innerBoxh2Str.replace(appendedDateStr, "");
+                            
+                            titleUni = innerBoxh2StrNoDate;
                 else:
-                    logging.debug("after remove CR LF,firstNaviStr is null");
-                    #http://janexyy.blogbus.com/logs/105359907.html
-                    # <div class="postHeader">
-                        # <h2>
-                            # <a href="http://janexyy.blogbus.com/logs/105359907.html" title="转载时请复制此超链接标明文章原始出处和作者信息">我们，细水长流</a>
-                        # </h2>
-                    # </div>
-                    titleUni = h2.a.string;
-                    logging.debug("h2.a.string type title, titleUni=%s", titleUni);
-            else:
-                # 
-                logging.debug("not found h2.contents's firstNaviStr");
-                logging.debug("h2.a=%s", h2.a);
-                logging.debug("h3=%s", h3);
-                if(h2.a):
-                    #http://princessbusy.blogbus.com/logs/165961786.html
-                    # <div class="postHeader">
-                     
-                        # <h2><a href="http://princessbusy.blogbus.com/logs/165961786.html ">天府之國，你的寬窄巷子</a></h2>
-                     
-                    # </div>
-                    titleUni = h2.a.string;
-                    logging.debug("no firstNaviStr but h2.a.string type, titleUni=%s", titleUni);
-                elif(h3):
-                    #http://kenleung.blogbus.com/logs/219268309.html
-                    # <div class="postHeader"><br>
-                        # <h3>鐵盒里的影劇院</h3>
-                        # <h2></h2>
-                    # </div>
-                    titleUni = h3.string;
-                    logging.debug("h3.string type title, titleUni=%s", titleUni);
+                    logging.error("tmp not support such type: no h2 and under innerBox also no h2");
         else:
             foundPost_Header = soup.find(attrs={"class":"post-header"});
             logging.debug("foundPost_Header=%s", foundPost_Header);
@@ -337,7 +410,11 @@ def extractTitle(url, html):
                     titleUni = postTitle.string;
                     #print "titleUni=",titleUni; # print some special char will cause error !!!
                     logging.debug("post-title type title, titleUni=%s", titleUni);
-                
+                else:
+                    logging.error("tmp not support: not found post-title, foundPost_Header=%s", foundPost_Header);
+            else:
+                logging.error("tmp not support: not found post-header, foundPost_Header=%s", foundPost_Header);
+
         logging.debug("extracted titleUni=%s", titleUni);
     except :
         logging.debug("Fail to extract tiltle from url=%s, html=\n%s", url, html);
@@ -523,6 +600,9 @@ def findNextPermaLink(url, html) :
     nextPostTitle = "";
 
     try :
+        #print "TODO: tmp not find next from dict !!!!"
+        #eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+        
         # nomally, following (parse next) is work, but some blogbus blog's next/prev disabled,
         # so here use unified get next link from relation dict
         #print "url=",url;
@@ -669,6 +749,40 @@ def extractDatetime(url, html) :
                         day     = foundDateStr.group("day");
                         pubDateUni = year + "-" + month + "-" + day;
                         logging.debug("original date string=%s, merged pubDateUni=%s", h3.string, pubDateUni);
+                    elif(h3 and h3.string and (re.match(u"^\w+ \d+, \d+$", h3.string))):
+                        #http://gogodoll.blogbus.com/logs/210877066.html
+                        # <div class="postHeader">
+                            # <h3>May 6, 2012</h3>
+                            # <h2>浮生三日 青岛 DAY3</h2>
+                        # </div>
+                        
+                        #http://gogodoll.blogbus.com/logs/212749872.html
+                        # <div class="postHeader">
+                            # <h3>May 13, 2012</h3>
+                            # <h2>嘴爸镜头下的丽江</h2>
+                        # </div>
+                        
+                        #http://gogodoll.blogbus.com/logs/216231813.html
+                        # <div class="postHeader">
+                            # <h3>Jun 3, 2012</h3>
+                            # <h2>why not?</h2>
+                        # </div>
+                        
+                        try:
+                            h3String = h3.string;
+                            logging.debug("h3String=%s", h3String);
+                            #8.1.7. strftime() and strptime() Behavior
+                            #%b Locale’s abbreviated month name. 
+                            #%d Day of the month as a decimal number [01,31]. 
+                            #%Y Year with century as a decimal number. 
+                            parsedDate = datetime.strptime(h3String, "%b %d, %Y");
+                            logging.debug("parsedDate=%s", parsedDate);
+                            
+                            datetimeUni = parsedDate.strftime("%Y-%m-%d %H:%M:%S");
+                            logging.debug("re-generated datetimeUni=%s", datetimeUni);
+                        except:
+                            logging.debug("parse %s to date failed.", h3String);
+
                     elif(foundPubDate.find(attrs={"class":"date"})):
                         #http://guthrun.blogbus.com/logs/30794012.html
                         # <div class="postHeader">
@@ -784,6 +898,23 @@ def extractDatetime(url, html) :
                 second = foundDatetimeStr.group("second");
                 datetimeUni = year+"-"+month+"-"+day+" "+hour+":"+minute+":"+second;
                 logging.debug("found the date time string, datetimeUni=%s", datetimeUni);
+            else:
+                # now try to find class="date" in postHeader
+                foundPostHeader = soup.find("div", {"class":"postHeader"});
+                logging.debug("foundPostHeader=%s", foundPostHeader);
+                if(foundPostHeader):
+                    foundH3Date = foundPostHeader.find("h3", {"class":"date"});
+                    logging.debug("foundH3Date=%s", foundH3Date);
+
+                    if(foundH3Date):
+                        #http://uk916.blogbus.com/logs/163734653.html
+                        # <div class="postHeader">
+                            # <h2>海寂&nbsp;&nbsp;[ <a href='/c4044389/'>摄影习作</a> ]</h2>
+                            # <h3 class="date">2011-09-27</h3>
+                        # </div>
+                        dateUni = foundH3Date.string;
+                        logging.debug("dateUni=%s", dateUni);
+                        datetimeUni = dateUni + " 00:00:00";
     else:
         #http://ajunecat.blogbus.com/logs/190104111.html
         # no postFooter, only contain:

@@ -7,10 +7,13 @@ For BlogsToWordpress, this file contains the functions for QQ Space.
 [TODO]
 
 [History]
-v1.8
+[v2.0]
+1.add support for http://84896189.qzone.qq.com, which contain special content & comments & subComments
+
+[v1.8]
 1.fixbug -> after get valid info from getPostInfoDictFromBlogid, then quit
 
-v1.7:
+[v1.7]
 1.support this kind of pic:
 http://ctc.qzs.qq.com/qzone/space_item/orig/1/76673/module_1.jpg
 2. fixbug -> change from (?!=src\\") to (?<=src=\\") to support real preceded match
@@ -843,6 +846,70 @@ def extractPosInfoDict(respHtml):
 # "responsecontent":[ ]}]
 # }}
 # ;
+
+
+
+#http://user.qzone.qq.com/84896189/blog/1
+#-> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=84896189&blogid=1&v6=1
+# respHtml contains comments:
+    # var g_oBlogData =  
+# {"data":{
+# "blogid":1,
+# "voteids":0,
+# "pubtime":1124532246,
+# "replynum":15,
+# "category":"个人日记",
+# "tag":"麽麽茶|夏天|横店影视城|柴油机|怎样抚摸女生胸部",
+# "title":"天凉好个秋",
+# "effect":512,
+# "effect2":0,
+# "exblogtype":0,
+# "sus_flag":false,
+# "friendrelation":[],
+# "lp_type":0,
+# "lp_id":0,
+# "lp_style":0,
+# "lp_flag":0,
+# "orguin":84896189,
+# "orgblogid":1,
+# "mention_uins":[ ],
+# "attach":[],
+# "comments":[{"id":1,
+# "postTime":1124609414,
+# "effect":4194304,
+# "content":" 让我想起lyc... ",
+# "ismyreply":0,
+# "capacity":4989,
+# "poster":{
+# "platform":1,
+# "id":"56304605",
+# "name":"nkdd "}
+# ,
+# "bmp":"18c19d8001004101",
+# "replyNum":0,
+# "replies":[]},
+# {"id":2,
+# "postTime":1124632542,
+# "effect":4194304,
+# "content":"是一个职业选手吗？有点印象\n其实每个季节都很可爱…… ",
+# "ismyreply":0,
+# "capacity":4947,
+# "poster":{
+# "platform":1,
+# "id":"315133125",
+# "name":"K先生 "}
+# ,
+# "bmp":"18c089a008004109",
+# "replyNum":0,
+# "replies":[]},
+# ...
+# ]
+# }}
+# ;
+
+
+
+
     #logging.debug("before extract post info, input respHtml: \n%s", respHtml);
     
     #blogDataPat = r'var\s+g_oBlogData\s+=.+?(?P<dataJsonStr>\{"data":\{.+?\}\}).+?;'; 
@@ -851,23 +918,80 @@ def extractPosInfoDict(respHtml):
     # some time the content contains '}}' will cause the found string is only part of the whole g_oBlogData !!!
     # so follow use 
     # \}\}\s+;
-    blogDataPat = r'var\s+g_oBlogData\s+=.+?(?P<dataJsonStr>\{"data":\{.+?\}\})\s+;';
-    blogDataPat += r".+g_oBlogData\.data\.cgiContent\s+?=\s+?'(?P<cgiContent>.+?)';";
-    foundBlogData = re.search(blogDataPat, respHtml, re.S);
+    
+    blogDataP = r'var\s+g_oBlogData\s+=.+?(?P<dataJsonStr>\{"data":\{.+?\}\})\s+;';
+    blogDataCgiContentP = r"(.+g_oBlogData\.data\.cgiContent\s+?=\s+?'(?P<cgiContent>.+?)';)?";
+    wholeBlogDataP = blogDataP + blogDataCgiContentP;
+    #logging.info("wholeBlogDataP=%s", wholeBlogDataP);
+    
+    foundBlogData = re.search(wholeBlogDataP, respHtml, re.S);
     logging.debug("foundBlogData=%s", foundBlogData);
     if(foundBlogData) :
         dataJsonStr = foundBlogData.group("dataJsonStr");
+        #logging.info("dataJsonStr=%s", dataJsonStr);
+        cgiContent = foundBlogData.group("cgiContent");
+        #logging.info("cgiContent=%s", cgiContent);
         postInfoDict = parseDataStrToInfoDict(dataJsonStr);
-        if(postInfoDict) :
-            cgiContent = foundBlogData.group("cgiContent");
+        logging.debug("postInfoDict=%s", postInfoDict);
+
+        if(cgiContent) :
             cgiContentUni = cgiContent.decode("GB18030");
             postInfoDict['cgiContent'] = cgiContentUni;
+        else:
+            #http://user.qzone.qq.com/84896189/blog/0
+            #-> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=84896189&blogid=0&v6=1
+            # respHtml has special blog data:
+                # var g_oBlogData =  
+            # {"data":{
+            # "blogid":0,
+            # "voteids":0,
+            # "pubtime":1121186754,
+            # "replynum":0,
+            # "category":"个人日记",
+            # "tag":"做什么|挂念|快乐|健身操|迷彩装",
+            # "title":"想念你们",
+            # "effect":512,
+            # "effect2":0,
+            # "exblogtype":0,
+            # "sus_flag":false,
+            # "friendrelation":[],
+            # "lp_type":0,
+            # "lp_id":0,
+            # "lp_style":0,
+            # "lp_flag":0,
+            # "orguin":84896189,
+            # "orgblogid":0,
+            # "mention_uins":[ ],
+            # "attach":[],
+            # "comments":[]
+            # }}
+            # ;
+            # ...
+            # <div id="blogDetailDiv" style="font-size:14px;">
+
+                
+
+                # 一年的时间就这样无声流走了，......只是觉得年轻好像离我越来越远了。
+
+                
+
+            # </div>
+            soup = BeautifulSoup(respHtml);
+            foundBlogDetail = soup.find("div", {"id":"blogDetailDiv"});
+            #logging.info("foundBlogDetail=%s", foundBlogDetail);
+            if(foundBlogDetail):
+                logging.debug("foundBlogDetail is OK");
+                #blogDetailUni = foundBlogDetail.string; #for special http://user.qzone.qq.com/84896189/blog/3, will get None !!!
+                blogDetailUni = crifanLib.soupContentsToUnicode(foundBlogDetail);
+
+                #logging.info("blogDetailUni=%s", blogDetailUni);
+                postInfoDict['cgiContent'] = blogDetailUni;
 
         debugStr = "";
         for key in postInfoDict :
             debugStr += "[%s]=%s\n"%(key, postInfoDict[key]);
         #logging.debug("extracted post info dict:\n%s", debugStr);
-    
+
     return postInfoDict;
 
 #------------------------------------------------------------------------------
@@ -890,7 +1014,7 @@ def getPostInfoDictFromBlogid(blogid, blogOutputDataServer):
         logging.debug("Now will open %s", getPostInfoUrl)
         respHtml = crifanLib.getUrlRespHtml(getPostInfoUrl);
         logging.debug("get resp html OK for %s", getPostInfoUrl);
-        #logging.debug("in get post info, blogOutputDataServer=%s, blogid=%d return html: \n%s", blogOutputDataServer, blogid, respHtml);
+        logging.debug("in get post info, blogOutputDataServer=%s, blogid=%d return html: \n%s", blogOutputDataServer, blogid, respHtml);
         postInfoDict = extractPosInfoDict(respHtml);
     except :
         logging.error("Can't get post info dict from blogid %d", blogid);
@@ -904,6 +1028,7 @@ def getPostInfoDictFromUrl(url):
     
     # extract blogid from url(perma link)
     blogid = extractBlogidFromPermaLink(url);
+    logging.debug("extracted blogid=%s", blogid);
 
     if(blogid in gVal['extractedPostInfo']) :
         # use post info we already got
@@ -1076,7 +1201,93 @@ def extractTags(url, html) :
 #------------------------------------------------------------------------------
 # fill source comments dictionary into destination comments dictionary
 def fillComments(destCmtDict, srcCmtDict):
+    if("replyid" in srcCmtDict):
+        return fillCommentsReplyList(destCmtDict, srcCmtDict);
+    elif("id" in srcCmtDict):
+        return fillCommentsComments(destCmtDict, srcCmtDict);
+    else:
+        logging.error("Can not support such kind of comments: no replyid and no id in comment dict");
+        return None;
 
+#------------------------------------------------------------------------------
+# fill source comments dictionary into destination comments dictionary, comments version
+def fillCommentsComments(destCmtDict, srcCmtDict):
+    
+    #http://user.qzone.qq.com/84896189/blog/1
+    #-> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=84896189&blogid=1&v6=1
+    # respHtml contains comments:
+
+    # "comments":[{"id":1,
+    # "postTime":1124609414,
+    # "effect":4194304,
+    # "content":" 让我想起lyc... ",
+    # "ismyreply":0,
+    # "capacity":4989,
+    # "poster":{
+    # "platform":1,
+    # "id":"56304605",
+    # "name":"nkdd "}
+    # ,
+    # "bmp":"18c19d8001004101",
+    # "replyNum":0,
+    # "replies":[]},
+    # {"id":2,
+    # "postTime":1124632542,
+    # "effect":4194304,
+    # "content":"是一个职业选手吗？有点印象\n其实每个季节都很可爱…… ",
+    # "ismyreply":0,
+    # "capacity":4947,
+    # "poster":{
+    # "platform":1,
+    # "id":"315133125",
+    # "name":"K先生 "}
+    # ,
+    # "bmp":"18c089a008004109",
+    # "replyNum":0,
+    # "replies":[]},
+    # ...
+    # ]
+    
+    destCmtDict['id'] = srcCmtDict['id'];
+    logging.debug("--- comment[%d] ---", destCmtDict['id']);
+    
+    destCmtDict['author'] = srcCmtDict['poster']['name'];
+    
+    qqNumStr = str(srcCmtDict['poster']['id']);
+    qqMailAddr = qqNumStr + "@qq.com";
+    destCmtDict['author_email'] = qqMailAddr;
+
+    qqSpaceUrl = gConst['spaceDomain'] + "/" + qqNumStr;
+    destCmtDict['author_url'] = qqSpaceUrl;
+    
+    localPostTime = crifanLib.timestampToDatetime(srcCmtDict['postTime']);
+    gmtPostTime = crifanLib.convertLocalToGmt(localPostTime);
+    #print "localPostTime=",localPostTime;
+    #print "gmtPostTime=",gmtPostTime;
+    destCmtDict['date'] = localPostTime.strftime("%Y-%m-%d %H:%M:%S");
+    destCmtDict['date_gmt'] = gmtPostTime.strftime("%Y-%m-%d %H:%M:%S");
+
+    destCmtDict['content'] = srcCmtDict['content'];
+    
+    destCmtDict['author_IP'] = "";
+    destCmtDict['approved'] = 1;
+    destCmtDict['type'] = '';
+    destCmtDict['parent'] = 0;
+    destCmtDict['user_id'] = 0;    
+    
+    logging.debug("author       =%s", destCmtDict['author']);
+    logging.debug("author_url   =%s", destCmtDict['author_url']);
+    logging.debug("date         =%s", destCmtDict['date']);
+    logging.debug("date_gmt     =%s", destCmtDict['date_gmt']);
+    logging.debug("content      =%s", destCmtDict['content']);
+    
+    #print "fill comments %d OK"%(destCmtDict['id']);
+    
+    return destCmtDict;
+
+#------------------------------------------------------------------------------
+# fill source comments dictionary into destination comments dictionary, replyList version
+def fillCommentsReplyList(destCmtDict, srcCmtDict):
 # "replylist":[{"replyid":1,
 # "replytime":1318227910,
 # "replyeffect":4194336,
@@ -1192,9 +1403,117 @@ def fillComments(destCmtDict, srcCmtDict):
     
     return destCmtDict;
     
+
 #------------------------------------------------------------------------------
 # fill sub comment
 def fillSubComment(destCmtDict, srcRespCntDict, parentId, curSubCmtId):
+    if("uin" in srcRespCntDict):
+        return fillSubCommentReplyList(destCmtDict, srcRespCntDict, parentId, curSubCmtId);
+    elif("id" in srcRespCntDict['poster']):
+        return fillSubCommentComments(destCmtDict, srcRespCntDict, parentId, curSubCmtId);
+    else:
+        logging.error("Can not support such kind of sub comments: no uin and no id in comment dict");
+        return None;
+
+#------------------------------------------------------------------------------
+# fill sub comment, comments version
+def fillSubCommentComments(destCmtDict, srcRespCntDict, parentId, curSubCmtId):
+    
+    #http://user.qzone.qq.com/84896189/blog/1201791673
+    #-> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=84896189&blogid=1201791673&v6=1
+    # respHtml contains sub comments:
+
+    # {"id":2,
+    # "postTime":1212767051,
+    # "effect":32,
+    # "content":"反对这种说法。我和老婆就是恋爱了7年才结的婚 ",
+    # "ismyreply":0,
+    # "capacity":4243,
+    # "poster":{
+    # "platform":1,
+    # "id":"529616213",
+    # "name":"潇湘剑 "}
+    # ,
+    # "bmp":"58418da04800c101",
+    # "replyNum":4,
+    # "replies":[{"poster":{
+    # "id":"84896189",
+    # "platform":1,
+    # "name":"娜丫头"}
+    # ,
+    # "postTime":1212824574,
+    # "id":1212824574,
+    # "effect":0,
+    # "content":"师兄好强悍！！赞一个！！ "},
+    # {"poster":{
+    # "id":"529616213",
+    # "platform":1,
+    # "name":"潇湘剑"}
+    # ,
+    # "postTime":1212824838,
+    # "id":1212824838,
+    # "effect":0,
+    # "content":"强悍？不至于。我不知道我生活圈外的人如何，在我的同学中这样的例子比比皆是。这两年很多成双成对的同学都心甘情愿的进入围城结束爱情长跑，跑得比我长的大有人在，甚至还有不少同学已经迫不及待地开始养育下一代，这才是强悍。 "},
+    # {"poster":{
+    # "id":"84896189",
+    # "platform":1,
+    # "name":"娜丫头"}
+    # ,
+    # "postTime":1212825106,
+    # "id":1212825106,
+    # "effect":0,
+    # "content":"看来真的是代沟问题了……要不就是我们还没长大……不过就算我现在反省……七年……30了……可以…… "},
+    # {"poster":{
+    # "id":"529616213",
+    # "platform":1,
+    # "name":"潇湘剑"}
+    # ,
+    # "postTime":1212825517,
+    # "id":1212825517,
+    # "effect":0,
+    # "content":"不要说代沟好不好？我还不是老年人。你也不用反省这么严重吧，每个人的爱情也不一样。我能做到这样不是因为爱情有多伟大，而是两人在一起成了习惯，有了依赖。最后两人在一起不是情人，而是亲人。就像《牵手》最后那一段：维系两人之间关系的除了孩子，就是曾经牵手一起走过的日子，时间越长越牢固。（大意如此，原文不记得了） "}]}
+    
+    destCmtDict['id'] = curSubCmtId;
+    logging.debug("--- comment[%d] ---", destCmtDict['id']);
+    
+    destCmtDict['author'] = srcRespCntDict['poster']['name'];
+    
+    qqNumStr = str(srcRespCntDict['poster']['id']);
+    qqMailAddr = qqNumStr + "@qq.com";
+    destCmtDict['author_email'] = qqMailAddr;
+
+    qqSpaceUrl = gConst['spaceDomain'] + "/" + qqNumStr;
+    destCmtDict['author_url'] = qqSpaceUrl;
+    
+    localPostTime = crifanLib.timestampToDatetime(srcRespCntDict['postTime']);
+    gmtPostTime = crifanLib.convertLocalToGmt(localPostTime);
+    #print "localPostTime=",localPostTime;
+    #print "gmtPostTime=",gmtPostTime;
+    destCmtDict['date'] = localPostTime.strftime("%Y-%m-%d %H:%M:%S");
+    destCmtDict['date_gmt'] = gmtPostTime.strftime("%Y-%m-%d %H:%M:%S");
+
+    destCmtDict['content'] = srcRespCntDict['content'];
+
+    destCmtDict['parent'] = parentId;
+    
+    destCmtDict['author_IP'] = "";
+    destCmtDict['approved'] = 1;
+    destCmtDict['type'] = '';
+    destCmtDict['user_id'] = 0;    
+    
+    logging.debug("author       =%s", destCmtDict['author']);
+    logging.debug("author_url   =%s", destCmtDict['author_url']);
+    logging.debug("date         =%s", destCmtDict['date']);
+    logging.debug("date_gmt     =%s", destCmtDict['date_gmt']);
+    logging.debug("content      =%s", destCmtDict['content']);
+    
+    #print "fill comments %d OK"%(destCmtDict['id']);
+    
+    return destCmtDict;
+
+#------------------------------------------------------------------------------
+# fill sub comment, replyList version
+def fillSubCommentReplyList(destCmtDict, srcRespCntDict, parentId, curSubCmtId):
     #"responsecontent":[{"uin":"84483423","nick":"/wx礼貌 ","time":1333439231,"effect":0,"content":"[em]e128[/em] 尽量吧 [em]e113[/em]@{uin:1102550638,nick:芸芸众生之冰封世界}  "} ]},
     
     #print "in fill sub comments";
@@ -1252,15 +1571,23 @@ def parseAllCommentsList(allReplyList, parsedCommentsList):
         fillComments(destCmtDict, srcCmtDict);
         parsedCommentsList.append(destCmtDict);
         
-        respSubCmtList = srcCmtDict['responsecontent'];
+        if("responsecontent" in srcCmtDict):
+            respSubCmtList = srcCmtDict['responsecontent'];
+        else:
+            respSubCmtList = srcCmtDict['replies'];
+
         if(respSubCmtList) :
             subCmtLen = len(respSubCmtList);
-            logging.debug("comment id=%d contain %d sub comments", srcCmtDict['replyid'], subCmtLen);
+            if("replyid" in srcCmtDict):
+                subCmtId = srcCmtDict['replyid'];
+            else:
+                subCmtId = srcCmtDict['id'];
+            logging.debug("comment id=%d contain %d sub comments", subCmtId, subCmtLen);
             curSubCmtId = mainCmtNum + 1;
             
             for eachSubCmtDict in respSubCmtList :
                 destSubCmtDict = {};
-                curMainCmtId = srcCmtDict['replyid'];
+                curMainCmtId = subCmtId;
                 logging.debug("curMainCmtId=%d", curMainCmtId);
                 fillSubComment(destSubCmtDict, eachSubCmtDict, curMainCmtId, curSubCmtId);
                 parsedCommentsList.append(destSubCmtDict);
@@ -1289,8 +1616,49 @@ def getCmtReplyList(blogid, startIdx, getNum) :
     #logging.debug("get comment ret callback str:\n%s", respCallbackStr);
 
     postInfoDict = callbackStrToInfoDict(respCallbackStr);
-    gotReplyList = postInfoDict['replylist'];
     
+    if("replylist" in postInfoDict):
+        gotReplyList = postInfoDict['replylist'];
+    else:
+        #http://user.qzone.qq.com/84896189/blog/1
+        #-> http://b11.cnc.qzone.qq.com/cgi-bin/blognew/blog_output_data?uin=84896189&blogid=1&v6=1
+        # respHtml contains comments:
+
+        # "comments":[{"id":1,
+        # "postTime":1124609414,
+        # "effect":4194304,
+        # "content":" 让我想起lyc... ",
+        # "ismyreply":0,
+        # "capacity":4989,
+        # "poster":{
+        # "platform":1,
+        # "id":"56304605",
+        # "name":"nkdd "}
+        # ,
+        # "bmp":"18c19d8001004101",
+        # "replyNum":0,
+        # "replies":[]},
+        # {"id":2,
+        # "postTime":1124632542,
+        # "effect":4194304,
+        # "content":"是一个职业选手吗？有点印象\n其实每个季节都很可爱…… ",
+        # "ismyreply":0,
+        # "capacity":4947,
+        # "poster":{
+        # "platform":1,
+        # "id":"315133125",
+        # "name":"K先生 "}
+        # ,
+        # "bmp":"18c089a008004109",
+        # "replyNum":0,
+        # "replies":[]},
+        # ...
+        # ]
+        
+        gotReplyList = postInfoDict['comments'];
+    
+    #logging.info("gotReplyList=%s", gotReplyList);
+
     return gotReplyList;
 
 #------------------------------------------------------------------------------
@@ -1311,7 +1679,10 @@ def fetchAndParseComments(url, html):
         alreadyGotCmtNum = 0;
         allReplyList = [];
         if(postInfoDict) :
-            alreadyGotReplyList = postInfoDict['replylist'];
+            if("replylist" in postInfoDict):
+                alreadyGotReplyList = postInfoDict['replylist'];
+            else:
+                alreadyGotReplyList = postInfoDict['comments'];
             #print "alreadyGotReplyList=",alreadyGotReplyList;
             alreadyGotCmtNum = len(alreadyGotReplyList);
             #print "alreadyGotCmtNum=",alreadyGotCmtNum;

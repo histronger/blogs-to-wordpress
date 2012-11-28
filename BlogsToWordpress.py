@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v16.2
+版本：     v16.6
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -24,6 +24,10 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v16.6]
+1. [BlogBlogbus] fix bugs for extract title and date time string
+2. [BlogQQ] add support for http://84896189.qzone.qq.com, which contain special content & comments & subComments
+
 [v16.2]
 1. csdn: Can not find the first link for http://blog.csdn.net/v_JULY_v, error=Unknown error!
 2. fix bug: on ubuntu, AttributeError: ‘module’ object has no attribute ‘getwindowsversion’
@@ -125,7 +129,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v16.2";
+__VERSION__ = "v16.6";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
@@ -1530,7 +1534,7 @@ def main():
     parser.add_option("-j","--autoJumpSensitivePost",action="store",type="string",default='yes',dest="autoJumpSensitivePost",help=u"自动跳过（即不更新处理）那些包含敏感信息的帖子：yes或no。默认为yes。比如如果去修改某些旧版百度空间帖子的话，其会返回 '文章内容包含不合适内容，请检查'，'文章标题包含不合适内容，请检查',等提示，此处则可以自动跳过，不处理此类帖子。");
     
     logging.info(u"版本信息：%s", __VERSION__);
-    logging.info(u"1.如果脚本运行出错，请务必把上述所打印的系统信息以及出错的相关信息，通过复制粘贴或者截图等方式");
+    logging.info(u"1.如果脚本运行出错，请务必把上述(1)从脚本开始运行到上述所打印出来的系统信息(2)出错时候的相关信息(3)脚本所生成的BlogsToWordpress.log文件，通过复制粘贴、截图、附件等方式");
     logging.info(u"  发送至admin(at)crifan.com或跟帖（下面有地址）回复，否则如果没有足够的错误相关信息，我就是想帮你解决问题，也没法帮啊！");
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
