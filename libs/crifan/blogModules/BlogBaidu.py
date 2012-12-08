@@ -7,6 +7,9 @@ For BlogsToWordpress, this file contains the functions for old and new Baidu spa
 [TODO]
 
 [History]
+[v3.4]
+1.fix bug for catetory extract, commited by Zhenyu Jiang
+
 [v3.3]
 1. support login mode and check private post and modify post for new baidu space
 2. new baidu html changed, update to support new title and content
@@ -42,7 +45,7 @@ import binascii;
 #import ast;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v3.3";
+__VERSION__ = "v3.4";
 
 gConst = {
     'baiduSpaceDomain'  : 'http://hi.baidu.com',
@@ -1031,12 +1034,16 @@ def extractCategory(url, html) :
                                     # </div>
             
             #here use the first tag as category
-            foundTagBox = soup.find(attrs={"class":"tag-box clearfix"});
+            #foundTagBox = soup.find(attrs={"class":"tag-box clearfix"});
+            foundTagBox = soup.find(attrs={"class":"mod-tagbox clearfix"});
             logging.debug("foundTagBox=%s", foundTagBox);
             if(foundTagBox):
                 tagBoxString = foundTagBox.a.string;
                 logging.debug("tagBoxString=%s", tagBoxString);
-                tagBoxString = tagBoxString.replace("#", "");
+                #tagBoxString = tagBoxString.replace("#", "");
+                #http://hi.baidu.com/jfojfo/item/d82ca1070052b98b03ce1b34
+                ##python&#47;js&#47;php&#47;html&#47;mysql&#47;http/feeds
+                tagBoxString = tagBoxString.lstrip('#');
                 catUni = tagBoxString;
         else:
             foundCat = soup.find(attrs={"class":"opt"}).findAll('a')[0];

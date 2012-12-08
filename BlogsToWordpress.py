@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v16.6
+版本：     v16.8
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -15,8 +15,14 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 BlogsToWordPress使用前必读
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/before_use/
 
-BlogsToWordPress 的用法的举例说明 
+BlogsToWordPress 的用法的举例说明
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_example/
+
+如何扩展BlogsToWordPress以支持更多类型的博客搬家
+http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/extend_blog_type/
+
+BlogsToWordPress – WordPress博客搬家工具 讨论区
+http://www.crifan.com/bbs/categories/blogstowordpress
 
 【TODO】
 1.增加对于friendOnly类型帖子的支持。
@@ -24,6 +30,10 @@ http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v16.8]
+1. [BlogBaidu] fix bug for catetory extract, provided by Zhenyu Jiang
+2. add template BlogXXX.py for add support for more new blog type
+
 [v16.6]
 1. [BlogBlogbus] fix bugs for extract title and date time string
 2. [BlogQQ] add support for http://84896189.qzone.qq.com, which contain special content & comments & subComments
@@ -129,7 +139,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v16.6";
+__VERSION__ = "v16.8";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
