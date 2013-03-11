@@ -3,12 +3,12 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v16.8
+版本：     v16.9
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【详细信息】
-BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，Blogbus博客大巴，天涯博客，点点轻博客等博客搬家到WordPress
+BlogsToWordPress：将(新版)百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，Blogbus博客大巴，天涯博客，点点轻博客等博客搬家到WordPress
 http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
 【使用说明】
@@ -30,6 +30,9 @@ http://www.crifan.com/bbs/categories/blogstowordpress
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v16.9]
+1.update for only support baidu new space
+
 [v16.8]
 1. [BlogBaidu] fix bug for catetory extract, provided by Zhenyu Jiang
 2. add template BlogXXX.py for add support for more new blog type
@@ -139,7 +142,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v16.8";
+__VERSION__ = "v16.9";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
@@ -1549,7 +1552,7 @@ def main():
     logging.info(u"2.如对此脚本使用有任何疑问，请输入-h参数以获得相应的参数说明。");
     logging.info(u"3.关于本程序详细的使用说明和更多相关信息，请参考：");
     #Change Here If Add New Blog Provider Support
-    logging.info(u"  BlogsToWordPress：将百度空间（新版和旧版），网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，博客大巴Blogbus，天涯博客，点点轻博客等博客搬家到WordPress");
+    logging.info(u"  BlogsToWordPress：将（新版）百度空间，网易163，新浪Sina，QQ空间，人人网，CSDN，搜狐Sohu，博客大巴Blogbus，天涯博客，点点轻博客等博客搬家到WordPress");
     logging.info(u"  http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/");
     printDelimiterLine();
     

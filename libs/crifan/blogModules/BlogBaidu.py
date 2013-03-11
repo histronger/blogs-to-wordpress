@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 
-For BlogsToWordpress, this file contains the functions for old and new Baidu space/blog.
+For BlogsToWordpress, this file contains the functions for (new) Baidu space/blog.
 
 [TODO]
+[v3.5]
+1.update for only support baidu new space
 
 [History]
 [v3.4]
@@ -45,7 +47,7 @@ import binascii;
 #import ast;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v3.4";
+__VERSION__ = "v3.5";
 
 gConst = {
     'baiduSpaceDomain'  : 'http://hi.baidu.com',
@@ -54,7 +56,6 @@ gConst = {
 #----------------------------------global values--------------------------------
 gVal = {
     'blogUser'      : '',   # serial_story
-    'quotedBlogUser': '',   # serial%5Fstory
     'blogEntryUrl'  : '',   # http://hi.baidu.com/recommend_music
     'cj'            : None, # cookiejar, to store cookies for login mode
     'spToken'       : '',
@@ -147,84 +148,29 @@ def extractBlogUser(inputUrl):
     logging.debug("Extracting blog user from url=%s", inputUrl);
         
     try :
-        # type1, main url: 
-        #(1) old space
-        # http://hi.baidu.com/recommend_music
-        # http://hi.baidu.com/recommend_music/
-        # http://hi.baidu.com/recommend_music/blog
-        # http://hi.baidu.com/recommend_music/blog/
-        # (2) new space
-        # http://hi.baidu.com/new/serial_story
-        # http://hi.baidu.com/new/serial_story/
-        # http://hi.baidu.com/new/serial_story/blog
-        # http://hi.baidu.com/new/serial_story/blog/
-        foundMainUrl = re.search("http://hi\.baidu\.com/(?P<isNewSpace>new/)?(?P<username>[\w-]+)(/(blog/?)?)?$", inputUrl);
-        logging.debug("foundMainUrl=%s", foundMainUrl);
-        if(foundMainUrl) :
-            extractedBlogUser   = foundMainUrl.group("username");
-            isNewSpace          = foundMainUrl.group("isNewSpace");
-            logging.debug("is main url, username=%s, isNewSpace=%s", extractedBlogUser, isNewSpace);
+        #now only support baidu new space, for baidu self not support old space anymore
+        gVal['isNewBaiduSpace'] = True;
+        logging.info("Now only support the new baidu space for baidu officially not support its old space anymore.");
+        
+        # type1: main url or post item url
+        #http://hi.baidu.com/rec_music
+        #http://hi.baidu.com/rec_music/
+        #http://hi.baidu.com/rec_music/item/e1c214c3b824037ecfd4f8aa
+        #http://hi.baidu.com/rec_music/item/e1c214c3b824037ecfd4f8aa/
+        foundMainOrItemUrl = re.search("http://hi\.baidu\.com/(?P<username>[\w\-_]+)(/item/\w+)?/?$", inputUrl);
+        logging.debug("foundMainOrItemUrl=%s", foundMainOrItemUrl);
+        if(foundMainOrItemUrl) :
+            extractedBlogUser   = foundMainOrItemUrl.group("username");
 
-            if(isNewSpace):
-                gVal['isNewBaiduSpace'] = True;
-                
-                newSlashStr = "new/";
-            else:
-                newSlashStr = "";
-
-            if(not crifanLib.strIsAscii(extractedBlogUser)) :
-                # if is: http://hi.baidu.com/资料收集
-                # then should quote it, otherwise later output to WXR will fail !
-                extractedBlogUser = urllib.quote(extractedBlogUser);
-
-            generatedBlogEntryUrl = gConst['baiduSpaceDomain'] + "/" + newSlashStr + extractedBlogUser;
+            generatedBlogEntryUrl = gConst['baiduSpaceDomain'] + "/" + extractedBlogUser;
             extractOk = True;
-            
-        if(not extractOk):
-            # type2, old space, perma link:
-            # http://hi.baidu.com/recommend_music/blog/item/f36b071112416ac3a6ef3f0e.html
-            foundOldPermaLink = re.search("http://hi\.baidu\.com/(?P<username>[\w-]+)/blog/item/\w+\.html$", inputUrl);
-            logging.debug("foundOldPermaLink=%s", foundOldPermaLink);
-            if(foundOldPermaLink) :
-                extractedBlogUser   = foundOldPermaLink.group("username");
-                logging.debug("is old permanent link, username=%s", extractedBlogUser);
-                
-                if(not crifanLib.strIsAscii(extractedBlogUser)) :
-                    # if is: http://hi.baidu.com/资料收集
-                    # then should quote it, otherwise later output to WXR will fail !
-                    extractedBlogUser = urllib.quote(extractedBlogUser);
-
-                generatedBlogEntryUrl = gConst['baiduSpaceDomain'] + "/" + extractedBlogUser;
-                extractOk = True;
-            
-        if(not extractOk):
-            # type3, new space, perma link:
-            # http://hi.baidu.com/serial_story/item/5625cfbbabf08fa7ebba9319
-            # http://hi.baidu.com/serial_story/item/5625cfbbabf08fa7ebba9319/
-            foundNewPermaLink = re.search("http://hi\.baidu\.com/(?P<username>[\w-]+)/item/\w+/?$", inputUrl);
-            logging.debug("foundNewPermaLink=%s", foundNewPermaLink);
-            if(foundNewPermaLink) :
-                gVal['isNewBaiduSpace'] = True;
-                
-                extractedBlogUser   = foundNewPermaLink.group("username");
-                logging.debug("is new permanent link, username=%s", extractedBlogUser);
-                
-                if(not crifanLib.strIsAscii(extractedBlogUser)) :
-                    # if is: http://hi.baidu.com/资料收集
-                    # then should quote it, otherwise later output to WXR will fail !
-                    extractedBlogUser = urllib.quote(extractedBlogUser);
-
-                generatedBlogEntryUrl = gConst['baiduSpaceDomain'] + "/new/" + extractedBlogUser;
-                extractOk = True;
     except :
         (extractOk, extractedBlogUser, generatedBlogEntryUrl) = (False, "", "");
         
     if (extractOk) :
         gVal['blogUser'] = extractedBlogUser;
         gVal['blogEntryUrl'] = generatedBlogEntryUrl;
-        
-        gVal['quotedBlogUser'] = doForceQuote(gVal['blogUser']);
-        logging.debug("blogUser=%s, blogEntryUrl=%s, quotedBlogUser=%s", gVal['blogUser'], gVal['blogEntryUrl'], gVal['quotedBlogUser']);
+        logging.debug("blogUser=%s, blogEntryUrl=%s", gVal['blogUser'], gVal['blogEntryUrl']);
 
     return (extractOk, extractedBlogUser, generatedBlogEntryUrl);
 
@@ -1674,9 +1620,6 @@ def isSelfBlogPic(picInfoDict):
     fd2 = picInfoDict['fields']['fd2'];
     fd3 = picInfoDict['fields']['fd3'];
     fd4 = picInfoDict['fields']['fd4'];
-    
-    #blogUser = gVal['blogUser'];
-    #quotedBlogUser = gVal['quotedBlogUser'];
 
     if(gVal['isNewBaiduSpace']):
         if (fd2=='hiphotos') and (fd3=='baidu') and (fd4=='com') :
@@ -1685,7 +1628,6 @@ def isSelfBlogPic(picInfoDict):
             isSelfPic = False;
 
     if(not isSelfPic):
-        #if (fd1=='hiphotos') and (fd2=='baidu') and ( fd3==blogUser or fd3==quotedBlogUser) :
         if (fd1=='hiphotos') and (fd2=='baidu') and (fd3=='com') :
             isSelfPic = True;
         else :
