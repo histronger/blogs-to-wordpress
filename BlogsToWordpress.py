@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v16.9
+版本：     v17.0
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -30,6 +30,9 @@ http://www.crifan.com/bbs/categories/blogstowordpress
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v17.0]
+1.fix csdn pic download
+
 [v16.9]
 1.update for only support baidu new space
 
@@ -142,7 +145,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v16.9";
+__VERSION__ = "v17.0";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
@@ -567,7 +570,6 @@ def processPhotos(blogContent):
                             #print "picInfoDict=",picInfoDict;
 
                             if picInfoDict['isSupportedPic'] :
-
                                 picUrl  = picInfoDict['picUrl'];
                                 filename= picInfoDict['filename'];
                                 suffix  = picInfoDict['suffix'];
@@ -579,9 +581,9 @@ def processPhotos(blogContent):
                                     suffix = 'jpg';
                                 suffix = suffix.lower();
 
-                                # print "filename=",filename;
-                                # print "suffix=",suffix
-                                # print "picInfoDict['fields']=",picInfoDict['fields'];
+                                #print "filename=",filename;
+                                #print "suffix=",suffix
+                                #print "picInfoDict['fields']=",picInfoDict['fields'];
                             
                                 # check isSelfBlog first to get info for latter isFileValid
                                 picInfoDict['isSelfBlog'] = curPicCfgDict['isSelfBlogPic'](picInfoDict);
@@ -652,7 +654,8 @@ def processPhotos(blogContent):
                                     if (gCfg['omitSimErrUrl'] == 'yes'): # take all error pic into record
                                         # when this pic occur error, then add to list
                                         gVal['errorUrlList'].append(curUrl);
-                                        logging.debug("Add invalid %s into global error url list.", curUrl);
+                                        #logging.debug("Add invalid %s into global error url list.", curUrl);
+                                        logging.info("Add invalid %s into global error url list.", curUrl);
                             else :
                                 logging.debug("Omit unsupported picture %s", curUrl);
                 # for that processed url, only replace the address

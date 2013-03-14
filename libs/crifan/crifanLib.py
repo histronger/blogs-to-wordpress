@@ -5,15 +5,47 @@
 crifanLib.py
 
 [Function]
-crifan's common functions, implemented by Python.
+crifan's common functions, implemented by Python 2.x.
 
 [Note]
-1. install chardet and BeautifulSoup before use this crifanLib.
+1. detailed explanation about this lib:
+crifan的Python库：crifanLib.py
+http://www.crifan.com/files/doc/docbook/python_summary/release/html/python_summary.html#crifanlib_py
+
+2. install chardet and BeautifulSoup before use this crifanLib.
 
 [TODO]
-1. use htmlentitydefs instead of mannually made html entity table
 
 [History]
+[v3.7]
+1. fixbug -> add user-agent for isFileValid
+
+[v3.6]
+1. add formatString
+
+[v3.5]
+1.output downloading size support print to same line.
+2. add removeInvalidCharInFilename
+
+[v3.4]
+1. initAutoHandleCookies support cookie file.
+
+[v3.3]
+1.add genListStr
+
+[v3.2]
+1. add ConvertELogStrToValue
+
+[v3.1]
+1. merge two manuallyDownloadFile int one
+
+[v3.0]
+1. add initAutoHandleCookies, getCurrentCookies, printCurrentCookies
+
+[v2.7]
+1. add decodeHtmlEntity, htmlEntityCodepointToName, 
+2. rename replaceStrEntToNumEnt to htmlEntityNameToCodepoint
+
 [v2.4]
 1. add another manuallyDownloadFile with headerDict support
 
@@ -54,27 +86,31 @@ import re;
 import sys;
 import time;
 import chardet;
-import urllib;
-import urllib2;
 from datetime import datetime,timedelta;
 from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
-#import htmlentitydefs;
 import struct;
 import zlib;
-
 import random;
+import math;
+
+import urllib;
+import urllib2;
+import cookielib;
 
 # from PIL import Image;
 # from operator import itemgetter;
 
+#Note: The htmlentitydefs module has been renamed to html.entities in Python 3.0.
+# so htmlentitydefs is only available between Python 2.3 and Python 2.7
+import htmlentitydefs;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v2.4";
+__VERSION__ = "v3.6";
 
 gConst = {
-    'constUserAgent' : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
-    #'constUserAgent' : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:15.0) Gecko/20100101 Firefox/15.0.1",
+    'UserAgent' : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
+    #'UserAgent' : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:15.0) Gecko/20100101 Firefox/15.0.1",
     
     # also belong to ContentTypes, more info can refer: http://kenya.bokee.com/3200033.html
     # here use Tuple to avoid unexpected change
@@ -90,7 +126,11 @@ gVal = {
     'picSufChars'       : '', # store the pic suffix char list
     
     'currentLevel'      : 0,
+    
+    'cj'                : None, # used to store current cookiejar, to support auto handle cookies
+    'cookieUseFile'     : False,
 }
+
 
 #### some internal functions ###
 #------------------------------------------------------------------------------
@@ -112,7 +152,42 @@ def genSufList() :
     wholeSuf = joinedSuf + swapedSuf;
 
     return wholeSuf;
+
+################################################################################
+# Math
+################################################################################
+def ConvertELogStrToValue(eLogStr):
+    """
+    convert string of natural logarithm base of E to value
+    return (convertOK, convertedValue)
+    eg:
+    input:  -1.1694737e-003
+    output: -0.0582246670563
     
+    input:  8.9455025e-004
+    output: 0.163843
+    """
+    
+    (convertOK, convertedValue) = (False, 0.0);
+    foundEPower = re.search("(?P<coefficientPart>-?\d+\.\d+)e(?P<ePowerPart>-\d+)", eLogStr, re.I);
+    #print "foundEPower=",foundEPower;
+    if(foundEPower):
+        coefficientPart = foundEPower.group("coefficientPart");
+        ePowerPart = foundEPower.group("ePowerPart");
+        #print "coefficientPart=%s,ePower=%s"%(coefficientPart, ePower);
+        coefficientValue = float(coefficientPart);
+        ePowerValue = float(ePowerPart);
+        #print "coefficientValue=%f,ePowerValue=%f"%(coefficientValue, ePowerValue);
+        #math.e= 2.71828182846
+        wholeOrigValue = coefficientValue * math.pow(math.e, ePowerValue);
+        #print "wholeOrigValue=",wholeOrigValue;
+        
+        (convertOK, convertedValue) = (True, wholeOrigValue);
+    else:
+        (convertOK, convertedValue) = (False, 0.0);
+    
+    return (convertOK, convertedValue);
+
 ################################################################################
 # Time
 ################################################################################
@@ -153,6 +228,10 @@ def calcTimeEnd(uniqueKey) :
     global gVal
 
     return time.time() - gVal['calTimeKeyDict'][uniqueKey];
+    
+################################################################################
+# HTML
+################################################################################
 
 #------------------------------------------------------------------------------
 # convert local GMT8 to GMT time
@@ -160,9 +239,154 @@ def calcTimeEnd(uniqueKey) :
 def convertLocalToGmt(localTime) :
     return localTime - timedelta(hours=8);
 
+def decodeHtmlEntity(origHtml, decodedEncoding=""):
+    """Decode html entity (name/decimal code point/hex code point) into unicode char (and then encode to decodedEncoding encoding char if decodedEncoding is not empty)
+    eg: from &copy; or &#169; or &#xa9; or &#xA9; to unicode '©', then encode to decodedEncoding if decodedEncoding is not empty
+    
+    Note:
+    Some special char can NOT show in some encoding, such as ©  can NOT show in GBK
+
+    Related knowledge:
+    http://www.htmlhelp.com/reference/html40/entities/latin1.html
+    http://www.htmlhelp.com/reference/html40/entities/special.html
+    """
+    decodedHtml = "";
+
+    #A dictionary mapping XHTML 1.0 entity definitions to their replacement text in ISO Latin-1
+    # 'zwnj': '&#8204;',
+    # 'aring': '\xe5',
+    # 'gt': '>',
+    # 'yen': '\xa5',
+    #logging.debug("htmlentitydefs.entitydefs=%s", htmlentitydefs.entitydefs);
+    
+    #A dictionary that maps HTML entity names to the Unicode codepoints
+    # 'aring': 229,
+    # 'gt': 62,
+    # 'sup': 8835,
+    # 'Ntilde': 209,
+    #logging.debug("htmlentitydefs.name2codepoint=%s", htmlentitydefs.name2codepoint);
+    
+    #A dictionary that maps Unicode codepoints to HTML entity names
+    # 8704: 'forall',
+    # 8194: 'ensp',
+    # 8195: 'emsp',
+    # 8709: 'empty',
+    #logging.debug("htmlentitydefs.codepoint2name=%s", htmlentitydefs.codepoint2name);
+
+    #http://fredericiana.com/2010/10/08/decoding-html-entities-to-text-in-python/
+    decodedEntityName = re.sub('&(?P<entityName>[a-zA-Z]{2,10});', lambda matched: unichr(htmlentitydefs.name2codepoint[matched.group("entityName")]), origHtml);
+    #print "type(decodedEntityName)=",type(decodedEntityName); #type(decodedEntityName)= <type 'unicode'>
+    decodedCodepointInt = re.sub('&#(?P<codePointInt>\d{2,5});', lambda matched: unichr(int(matched.group("codePointInt"))), decodedEntityName);
+    #print "decodedCodepointInt=",decodedCodepointInt;
+    decodedCodepointHex = re.sub('&#x(?P<codePointHex>[a-fA-F\d]{2,5});', lambda matched: unichr(int(matched.group("codePointHex"), 16)), decodedCodepointInt);
+    #print "decodedCodepointHex=",decodedCodepointHex;
+
+    #logging.info("origHtml=%s", origHtml);
+    decodedHtml = decodedCodepointHex;
+    #logging.info("decodedHtml=%s", decodedHtml);
+    
+    if(decodedEncoding):
+        # note: here decodedHtml is unicode
+        decodedHtml = decodedHtml.encode(decodedEncoding, 'ignore');
+        #print "after encode into decodedEncoding=%s, decodedHtml=%s"%(decodedEncoding, decodedHtml);
+        
+    return decodedHtml;
+
+#------------------------------------------------------------------------------
+def htmlEntityNameToCodepoint(htmlWithEntityName):
+    """Convert html's entity name into entity code point
+    eg: from &nbsp; to &#160; 
+    
+    related knowledge:
+    http://www.htmlhelp.com/reference/html40/entities/latin1.html
+    http://www.htmlhelp.com/reference/html40/entities/special.html
+    """
+
+    # 'aring':  229,
+    # 'gt':     62,
+    # 'sup':    8835,
+    # 'Ntilde': 209,
+    
+    # "&aring;":"&#229;",
+    # "&gt":    "&#62;",
+    # "&sup":   "&#8835;",
+    # "&Ntilde":"&#209;",
+    nameToCodepointDict = {};
+    for eachName in htmlentitydefs.name2codepoint:
+        fullName = "&" + eachName + ";";
+        fullCodepoint = "&#" + str(htmlentitydefs.name2codepoint[eachName]) + ";";
+        nameToCodepointDict[fullName] = fullCodepoint;
+
+    #"&aring;" -> "&#229;"
+    htmlWithCodepoint = htmlWithEntityName;
+    for key in nameToCodepointDict.keys() :
+        htmlWithCodepoint = re.compile(key).sub(nameToCodepointDict[key], htmlWithCodepoint);
+    return htmlWithCodepoint;
+
+#------------------------------------------------------------------------------
+def htmlEntityCodepointToName(htmlWithCodepoint):
+    """Convert html's entity code point into entity name
+    eg: from &#160; to &nbsp;
+    
+    related knowledge:
+    http://www.htmlhelp.com/reference/html40/entities/latin1.html
+    http://www.htmlhelp.com/reference/html40/entities/special.html
+    """
+    # 8704: 'forall',
+    # 8194: 'ensp',
+    # 8195: 'emsp',
+    # 8709: 'empty',
+    
+    # "&#8704;": "&forall;",
+    # "&#8194;": "&ensp;",
+    # "&#8195;": "&emsp;",
+    # "&#8709;": "&empty;",
+    codepointToNameDict = {};
+    for eachCodepoint in htmlentitydefs.codepoint2name:
+        fullCodepoint = "&#" + str(eachCodepoint) + ";";
+        fullName = "&" + htmlentitydefs.codepoint2name[eachCodepoint] + ";";
+        codepointToNameDict[fullCodepoint] = fullName;
+
+    #"&#160;" -> "&nbsp;"
+    htmlWithEntityName = htmlWithCodepoint;
+    for key in codepointToNameDict.keys() :
+        htmlWithEntityName = re.compile(key).sub(codepointToNameDict[key], htmlWithEntityName);
+    return htmlWithEntityName;
+    
 ################################################################################
 # String
 ################################################################################
+
+def formatString(inputStr, paddingChar="=", totalWidth=80):
+    """
+    format string, to replace for:
+    print '{0:=^80}'.format("xxx");
+    """
+    formatting = "{0:" + paddingChar + "^" + str(totalWidth) + "}";
+    return formatting.format(inputStr);
+    
+
+def genListStr(listValue, encForUniVal="UTF-8", isRetainLastComma = False, delimiter=","):
+    """
+    generate string of values in list, separated by delimiter
+    eg:
+    input: ["20121202", "天平山赏红枫", "动物"]
+    output: 20121202,天平山赏红枫,动物
+    """
+    #print "listValue=",listValue;
+
+    generatedListStr = "";
+    for eachValue in listValue:
+        if(isinstance(eachValue, unicode)):
+            generatedListStr += eachValue.encode(encForUniVal) + delimiter;
+        else:
+            generatedListStr += str(eachValue) + delimiter;
+
+    if(not isRetainLastComma):
+        if(generatedListStr and (generatedListStr[-1] == delimiter)):
+            #remove last ,
+            generatedListStr = generatedListStr[:-1];
+    return generatedListStr;
 
 #------------------------------------------------------------------------------
 # generated the random digits number string
@@ -305,6 +529,19 @@ def findSimilarUrl(url, urlList) :
 def removeNonWordChar(inputString) :
     return re.sub(r"[^\w]", "", inputString); # non [a-zA-Z0-9_]
 
+def removeInvalidCharInFilename(inputFilename, replacedChar=""):
+	"""
+	Remove invalid char in filename
+	eg: 
+	《神魔手下好当差/穿越之傀儡娃娃》全集
+	《神魔手下好当差_穿越之傀儡娃娃》全集
+	"""
+	filteredFilename = inputFilename;
+	invalidCharList = ['^', '~', '<', '>', '*', '?', '/', '\\', '!'];
+	for eachInvalidChar in invalidCharList:
+		filteredFilename = filteredFilename.replace(eachInvalidChar, replacedChar);
+	return filteredFilename;
+
 #------------------------------------------------------------------------------
 # remove control character from input string
 # otherwise will cause wordpress importer import failed
@@ -352,150 +589,6 @@ def removeAnsiCtrlChar(inputString):
         if(isValidChr) :
             validContent += c;
     return validContent;
-
-#------------------------------------------------------------------------------
-# convert the string entity to unicode unmber entity
-# refer: http://www.htmlhelp.com/reference/html40/entities/latin1.html
-# TODO: need later use this htmlentitydefs instead following
-def replaceStrEntToNumEnt(text) :
-    strToNumEntDict = {
-        # Latin-1 Entities
-        "&nbsp;"	:   "&#160;",
-        "&iexcl;"	:   "&#161;",
-        "&cent;"    :   "&#162;",
-        "&pound;"	:   "&#163;",
-        "&curren;"	:   "&#164;",
-        "&yen;"	    :   "&#165;",
-        "&brvbar;"	:   "&#166;",
-        "&sect;"	:   "&#167;",
-        "&uml;"	    :   "&#168;",
-        "&copy;"	:   "&#169;",
-        "&ordf;"	:   "&#170;",
-        "&laquo;"	:   "&#171;",
-        "&not;"	    :   "&#172;",
-        "&shy;"	    :   "&#173;",
-        "&reg;"	    :   "&#174;",
-        "&macr;"	:   "&#175;",
-        "&deg;"	    :   "&#176;",
-        "&plusmn;"	:   "&#177;",
-        "&sup2;"	:   "&#178;",
-        "&sup3;"	:   "&#179;",
-        "&acute;"	:   "&#180;",
-        "&micro;"	:   "&#181;",
-        "&para;"	:   "&#182;",
-        "&middot;"	:   "&#183;",
-        "&cedil;"	:   "&#184;",
-        "&sup1;"    :   "&#185;",
-        "&ordm;"    :   "&#186;",
-        "&raquo;"	:   "&#187;",
-        "&frac14;"	:   "&#188;",
-        "&frac12;"	:   "&#189;",
-        "&frac34;"	:   "&#190;",
-        "&iquest;"	:   "&#191;",
-        "&Agrave;"	:   "&#192;",
-        "&Aacute;"	:   "&#193;",
-        "&Acirc;"	:   "&#194;",
-        "&Atilde;"	:   "&#195;",
-        "&Auml;"	:   "&#196;",
-        "&Aring;"	:   "&#197;",
-        "&AElig;"	:   "&#198;",
-        "&Ccedil;"	:   "&#199;",
-        "&Egrave;"	:   "&#200;",
-        "&Eacute;"	:   "&#201;",
-        "&Ecirc;"	:   "&#202;",
-        "&Euml;"    :   "&#203;",
-        "&Igrave;"	:   "&#204;",
-        "&Iacute;"	:   "&#205;",
-        "&Icirc;"	:   "&#206;",
-        "&Iuml;"    :   "&#207;",
-        "&ETH;"	    :   "&#208;",
-        "&Ntilde;"	:   "&#209;",
-        "&Ograve;"	:   "&#210;",
-        "&Oacute;"	:   "&#211;",
-        "&Ocirc;"	:   "&#212;",
-        "&Otilde;"	:   "&#213;",
-        "&Ouml;"	:   "&#214;",
-        "&times;"	:   "&#215;",
-        "&Oslash;"	:   "&#216;",
-        "&Ugrave;"	:   "&#217;",
-        "&Uacute;"	:   "&#218;",
-        "&Ucirc;"	:   "&#219;",
-        "&Uuml;"	:   "&#220;",
-        "&Yacute;"	:   "&#221;",
-        "&THORN;"	:   "&#222;",
-        "&szlig;"	:   "&#223;",
-        "&agrave;"	:   "&#224;",
-        "&aacute;"	:   "&#225;",
-        "&acirc;"	:   "&#226;",
-        "&atilde;"	:   "&#227;",
-        "&auml;"	:   "&#228;",
-        "&aring;"	:   "&#229;",
-        "&aelig;"	:   "&#230;",
-        "&ccedil;"	:   "&#231;",
-        "&egrave;"	:   "&#232;",
-        "&eacute;"	:   "&#233;",
-        "&ecirc;"	:   "&#234;",
-        "&euml;"	:   "&#235;",
-        "&igrave;"	:   "&#236;",
-        "&iacute;"	:   "&#237;",
-        "&icirc;"	:   "&#238;",
-        "&iuml;"	:   "&#239;",
-        "&eth;"	    :   "&#240;",
-        "&ntilde;"	:   "&#241;",
-        "&ograve;"	:   "&#242;",
-        "&oacute;"	:   "&#243;",
-        "&ocirc;"	:   "&#244;",
-        "&otilde;"	:   "&#245;",
-        "&ouml;" 	:   "&#246;",
-        "&divide;"	:   "&#247;",
-        "&oslash;"	:   "&#248;",
-        "&ugrave;"	:   "&#249;",
-        "&uacute;"	:   "&#250;",
-        "&ucirc;"	:   "&#251;",
-        "&uuml;"	:   "&#252;",
-        "&yacute;"	:   "&#253;",
-        "&thorn;"	:   "&#254;",
-        "&yuml;"	:   "&#255;",
-        # http://www.htmlhelp.com/reference/html40/entities/special.html
-        # Special Entities
-        "&quot;"    : "&#34;",
-        "&amp;"     : "&#38;",
-        "&lt;"      : "&#60;",
-        "&gt;"      : "&#62;",
-        "&OElig;"   : "&#338;",
-        "&oelig;"   : "&#339;",
-        "&Scaron;"  : "&#352;",
-        "&scaron;"  : "&#353;",
-        "&Yuml;"    : "&#376;",
-        "&circ;"    : "&#710;",
-        "&tilde;"   : "&#732;",
-        "&ensp;"    : "&#8194;",
-        "&emsp;"    : "&#8195;",
-        "&thinsp;"  : "&#8201;",
-        "&zwnj;"    : "&#8204;",
-        "&zwj;"     : "&#8205;",
-        "&lrm;"     : "&#8206;",
-        "&rlm;"     : "&#8207;",
-        "&ndash;"   : "&#8211;",
-        "&mdash;"   : "&#8212;",
-        "&lsquo;"   : "&#8216;",
-        "&rsquo;"   : "&#8217;",
-        "&sbquo;"   : "&#8218;",
-        "&ldquo;"   : "&#8220;",
-        "&rdquo;"   : "&#8221;",
-        "&bdquo;"   : "&#8222;",
-        "&dagger;"  : "&#8224;",
-        "&Dagger;"  : "&#8225;",
-        "&permil;"  : "&#8240;",
-        "&lsaquo;"  : "&#8249;",
-        "&rsaquo;"  : "&#8250;",
-        "&euro;"    : "&#8364;",
-        }
-
-    replacedText = text;
-    for key in strToNumEntDict.keys() :
-        replacedText = re.compile(key).sub(strToNumEntDict[key], replacedText);
-    return replacedText;
 
 #------------------------------------------------------------------------------
 # convert the xxx=yyy into tuple('xxx', yyy), then return the tuple value
@@ -620,6 +713,76 @@ def saveBinDataToFile(binaryData, fileToSave):
 
 
 ################################################################################
+# Cookies
+################################################################################
+
+def initAutoHandleCookies(localCookieFileName=None):
+    """Add cookiejar to support auto handle cookies.
+    support designate cookie file
+    
+    Note:
+    after this init, later urllib2.urlopen will automatically handle cookies
+    """
+
+    if(localCookieFileName):
+        gVal['cookieUseFile'] = True;
+        #print "use cookie file";
+        
+        #gVal['cj'] = cookielib.FileCookieJar(localCookieFileName); #NotImplementedError
+        gVal['cj'] = cookielib.LWPCookieJar(localCookieFileName); # prefer use this
+        #gVal['cj'] = cookielib.MozillaCookieJar(localCookieFileName); # second consideration
+        #create cookie file
+        gVal['cj'].save();
+    else:
+        #print "not use cookie file";
+        gVal['cookieUseFile'] = False;
+        
+        gVal['cj'] = cookielib.CookieJar();
+
+    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(gVal['cj']));
+    urllib2.install_opener(opener);
+
+    #print "Auto handle cookies inited OK";
+    return;
+
+#------------------------------------------------------------------------------
+def getCurrentCookies():
+    """Return current cookies.
+    
+    Note:
+    only call this this function, if you previously called initAutoHandleCookies
+    """
+    return gVal['cj'];
+
+#------------------------------------------------------------------------------
+def printCurrentCookies():
+    """Just print current cookies for debug simplicity.
+    """
+    if(gVal['cj']):
+        for index, cookie in enumerate(gVal['cj']):
+            print "[%d] name=%s,value=%s,domain=%s,path=%s,secure=%s,expires=%s,version=%d"% \
+                (index, cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure, cookie.expires, cookie.version);
+
+#------------------------------------------------------------------------------
+def checkAllCookiesExist(cookieNameList, cookieJar) :
+    """Check all cookies('s name) in cookiesDict is exist in cookieJar or not"""
+    cookiesDict = {};
+    for eachCookieName in cookieNameList :
+        cookiesDict[eachCookieName] = False;
+    
+    allCookieFound = True;
+    for cookie in cookieJar :
+        if(cookie.name in cookiesDict) :
+            cookiesDict[cookie.name] = True;
+    
+    for eachCookie in cookiesDict.keys() :
+        if(not cookiesDict[eachCookie]) :
+            allCookieFound = False;
+            break;
+
+    return allCookieFound;
+
+################################################################################
 # Network: urllib/urllib2/http
 ################################################################################
 
@@ -652,7 +815,14 @@ def isFileValid(fileUrl) :
         lowUnquotedOrigFilename = unquotedOrigFilenname.lower();
         #print "lowUnquotedOrigFilename=",lowUnquotedOrigFilename;
         
-        resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']); # note: Python 2.6 has added timeout support.
+        #resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']); # note: Python 2.6 has added timeout support.
+        #some url, such as
+        #http://my.csdn.net/uploads/201205/03/1336006009_2164.jpg
+        #if not give user-agent, then will error: HTTP Error 403: Forbidden
+        request = urllib2.Request(fileUrl, headers={'User-Agent' : gConst['UserAgent']});
+        #print "request=",request;
+        resp = urllib2.urlopen(request, timeout=gConst['defaultTimeout']);
+        
         #print "resp=",resp;
         realUrl = resp.geturl();
         #print "realUrl=",realUrl;
@@ -718,7 +888,7 @@ def downloadFile(fileUrl, fileToSave, needReport = False) :
         if copiedBlocks == 0 : # 1st call : once on establishment of the network connection
             print 'Begin to download %s, total size=%d'%(downloadingFile, totalFileSize);
         else : # rest call : once after each block read thereafter
-            print 'Downloaded bytes: %d' % ( blockSize * copiedBlocks);
+            print 'Downloaded bytes: %d\r' % ( blockSize * copiedBlocks),;
         return;
     #---------------------------------------------------------------------------
 
@@ -740,57 +910,53 @@ def downloadFile(fileUrl, fileToSave, needReport = False) :
     return isDownOK;
 
 #------------------------------------------------------------------------------
-# manually download fileUrl then save to fileToSave
-def manuallyDownloadFile(fileUrl, fileToSave):
+def manuallyDownloadFile(fileUrl, fileToSave, headerDict=""):
+    """manually download fileUrl then save to fileToSave, with header support"""
+    
     isDownOK = False;
-    downloadingFile = '';
-
+    errReason = "No error";
+    
     try :
         if fileUrl :
-            # 1. find real address
-            #print "fileUrl=",fileUrl;
-            resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']);
-            #print "resp=",resp;
-            realUrl = resp.geturl(); # not same with original file url if redirect
+            respHtml = "";
+            if(headerDict):
+                respHtml = getUrlRespHtml(fileUrl, headerDict=headerDict,useGzip=False, timeout=gConst['defaultTimeout']);
+            else:
+                # 1. find real address
+                #print "fileUrl=",fileUrl;
+                resp = urllib2.urlopen(fileUrl, timeout=gConst['defaultTimeout']);
+                #print "resp=",resp;
+                realUrl = resp.geturl(); # not same with original file url if redirect
+                # if url is invalid, then add timeout can avoid dead
+                respHtml = getUrlRespHtml(realUrl, useGzip=False, timeout=gConst['defaultTimeout']);
             
-            # if url is invalid, then add timeout can avoid dead
-            respHtml = getUrlRespHtml(realUrl, useGzip=False, timeout=gConst['defaultTimeout']);
-            
-            isDownOK = saveBinDataToFile(respHtml, fileToSave);
-        else :
-            print "Input download file url is NULL";
-    except urllib.ContentTooShortError(msg) :
-        isDownOK = False;
-    except :
-        isDownOK = False;
-
-    return isDownOK;
-
-#------------------------------------------------------------------------------
-# manually download fileUrl then save to fileToSave, with header support
-def manuallyDownloadFile(fileUrl, fileToSave, headerDict):
-    isDownOK = False;
-    downloadingFile = '';
-
-    try :
-        if fileUrl :
-            respHtml = getUrlRespHtml(fileUrl, headerDict=headerDict,useGzip=False, timeout=gConst['defaultTimeout']);
             if(respHtml):
                 isDownOK = saveBinDataToFile(respHtml, fileToSave);
         else :
             print "Input download file url is NULL";
-    except urllib.ContentTooShortError(msg) :
+    except urllib2.URLError,reason:
         isDownOK = False;
+        errReason = reason;
+    except urllib2.HTTPError,code :
+        isDownOK = False;
+        errReason = code;
     except :
         isDownOK = False;
+        errReason = "Unknown error";
 
+    #print "isDownOK=%s, errReason=%s"%(isDownOK, errReason);
     return isDownOK;
 
 #------------------------------------------------------------------------------
-# get response from url
-# note: if you have already used cookiejar, then here will automatically use it
-# while using rllib2.Request
 def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
+    """Get response from url, support optional postDict,headerDict,timeout,useGzip
+
+    Note:
+    1. if postDict not null, url request auto become to POST instead of default GET
+    2  if you want to auto handle cookies, should call initAutoHandleCookies() before use this function.
+       then following urllib2.Request will auto handle cookies
+    """
+
     # makesure url is string, not unicode, otherwise urllib2.urlopen will error
     url = str(url);
 
@@ -807,7 +973,7 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
             req.add_header(key, headerDict[key]);
 
     defHeaderDict = {
-        'User-Agent'    : gConst['constUserAgent'],
+        'User-Agent'    : gConst['UserAgent'],
         'Cache-Control' : 'no-cache',
         'Accept'        : '*/*',
         'Connection'    : 'Keep-Alive',
@@ -833,6 +999,10 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
         resp = urllib2.urlopen(req, timeout=timeout);
     else :
         resp = urllib2.urlopen(req);
+    
+    #update cookies into local file
+    if(gVal['cookieUseFile']):
+        gVal['cj'].save();
     
     return resp;
 
@@ -865,28 +1035,6 @@ def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=True) :
 
     return respHtml;
 
-################################################################################
-# Cookies
-################################################################################
-
-#------------------------------------------------------------------------------
-# check all cookies in cookiesDict is exist in cookieJar or not
-def checkAllCookiesExist(cookieNameList, cookieJar) :
-    cookiesDict = {};
-    for eachCookieName in cookieNameList :
-        cookiesDict[eachCookieName] = False;
-    
-    allCookieFound = True;
-    for cookie in cookieJar :
-        if(cookie.name in cookiesDict) :
-            cookiesDict[cookie.name] = True;
-    
-    for eachCookie in cookiesDict.keys() :
-        if(not cookiesDict[eachCookie]) :
-            allCookieFound = False;
-            break;
-
-    return allCookieFound;
 
 ################################################################################
 # Image

@@ -5,6 +5,9 @@
 For BlogsToWordpress, this file contains the functions for Csdn Blog.
 
 【版本历史】
+[v1.2]
+1.update for download csdn pic.
+
 [v1.1]
 1. csdn: Can not find the first link for http://blog.csdn.net/v_JULY_v, error=Unknown error! -> just csdn sometime down, use script for another time
 2. fixbug: get next link from url relation dict fail for url lower case not match
@@ -892,7 +895,9 @@ def isSelfBlogPic(picInfoDict):
     fd1 = picInfoDict['fields']['fd1'];
     fd2 = picInfoDict['fields']['fd2'];
 
-    if (fd1=='hi') and (fd2=='csdn'):
+    #(1) hi.csdn
+    #(2) http://my.csdn.net/uploads/201205/03/1336005998_9131.png
+    if ((fd1=='hi') or (fd1=='my')) and (fd2=='csdn'):
         isSelfPic = True;
     else :
         isSelfPic = False;
@@ -900,6 +905,17 @@ def isSelfBlogPic(picInfoDict):
     logging.debug("isSelfBlogPic: %s", isSelfPic);
 
     return isSelfPic;
+ 
+#------------------------------------------------------------------------------
+# download file
+def downloadFile(curPostUrl, picInfoDict, dstPicFile) :
+    curUrl = picInfoDict['picUrl'];
+    #if not add follow user-agent, then download file will 403 forbidden error
+    headerDict = {
+        'Referer' : curPostUrl,
+        'User-Agent' : "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:15.0) Gecko/20100101 Firefox/15.0.1",
+    };
+    return crifanLib.manuallyDownloadFile(curUrl, dstPicFile, headerDict);
 
 #------------------------------------------------------------------------------
 def getProcessPhotoCfg():
@@ -920,7 +936,7 @@ def getProcessPhotoCfg():
         'isSelfBlogPic'     : isSelfBlogPic,
         'genNewOtherPicName': None,
         'isFileValid'       : None,
-        'downloadFile'      : None,
+        'downloadFile'      : downloadFile,
     };
     
     return processPicCfgDict;
