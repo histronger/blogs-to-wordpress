@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v17.0
+版本：     v17.1
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -30,6 +30,10 @@ http://www.crifan.com/bbs/categories/blogstowordpress
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v17.1]
+1.fix error for extract post title  and nex link for:
+http://78391997.qzone.qq.com/
+
 [v17.0]
 1.fix csdn pic download
 
@@ -145,7 +149,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v17.0";
+__VERSION__ = "v17.1";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",

@@ -4,9 +4,12 @@
 
 For BlogsToWordpress, this file contains the functions for QQ Space.
 
-[TODO]
 
 [History]
+[v2.1]
+1.fix error for extract post title  and nex link for:
+http://78391997.qzone.qq.com/
+
 [v2.0]
 1.add support for http://84896189.qzone.qq.com, which contain special content & comments & subComments
 
@@ -40,7 +43,7 @@ import json; # New in version 2.6.
 import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.8";
+__VERSION__ = "v2.1";
 
 gConst = {
     'spaceDomain'  : 'http://user.qzone.qq.com',
@@ -233,7 +236,24 @@ def extractBlogUser(inputUrl):
 def removeCallbackStr(respCallbackStr) :
     jsonStr = "";
     #foundJson = re.search("_Callback\((?P<jsonStr>.+)\);$", respCallbackStr, re.S);
-    foundJson = re.search("_Callback\(\s+(?P<jsonStr>\{.+\})\s+\);$", respCallbackStr, re.S);
+    
+    #logging.info("in removeCallbackStr, respCallbackStr=%s", respCallbackStr);
+    
+    #foundJson = re.search("_Callback\(\s+(?P<jsonStr>\{.+\})\s+\);$", respCallbackStr, re.S);
+    #http://user.qzone.qq.com/78391997/blog/1196351378
+    # _Callback({
+        # "code":0,
+        # "subcode":0,
+        # "message":"",
+        # "default":0,
+        # "data":
+    # {"thisblog":1196351378,
+    # "prev_list":[{"blogid":1196521398,
+    # "title":"感谢……又到周末了"}],
+    # "next_list":[]}}
+    # );
+    foundJson = re.search("_Callback\(\s*(?P<jsonStr>\{.+\})\s*\);$", respCallbackStr, re.S);
+    
     logging.debug("in remove callback string, foundJson=%s", foundJson);
     if(foundJson) :
         jsonStr = foundJson.group("jsonStr");
@@ -919,13 +939,62 @@ def extractPosInfoDict(respHtml):
     # so follow use 
     # \}\}\s+;
     
-    blogDataP = r'var\s+g_oBlogData\s+=.+?(?P<dataJsonStr>\{"data":\{.+?\}\})\s+;';
+    #http://user.qzone.qq.com/78391997/blog/1196351378
+    
+    # <span class="blog_tit_detail">
+
+        
+
+                                
+
+        # 一切，一切，重新开始
+
+    # </span>
+    
+    # <div id="blogDetailDiv" style="font-size:14px;">
+
+        
+
+        # 几乎把整个空间全部都清空了，很多很多事情，全部都清空了，有些也许是暂时的，有些也许是永远的。这首in my life一直在我耳边回响，很喜欢很喜欢，too much thing in my life，&quot;there are&nbsp;&nbsp;place i remember...so forever not for better, some have gone and some remain...&quot; 是否生活就是这个样子的呢，甲壳虫的经典歌曲被如此翻唱以后，也让人值得回味。<br  />以后的日子，我会一点点再把空间填满，用我的生活，我的喜怒哀乐……<br  />&quot;...in my life i love you more&quot;我会更爱生活的。一切重新重新开始！
+
+        
+
+    # </div>
+    
+
+    # var g_oBlogData =  {"data":{
+# "blogid":1196351378,
+# "voteids":0,
+# "pubtime":1196351378,
+# "replynum":0,
+# "category":"个人日记",
+# "tag":"甲壳虫|经典歌曲|翻唱|重新开始|我的生活",
+# "title":"一切，一切，重新开始",
+# "effect":512,
+# "effect2":0,
+# "exblogtype":0,
+# "sus_flag":false,
+# "friendrelation":[],
+# "lp_type":0,
+# "lp_id":0,
+# "lp_style":0,
+# "lp_flag":0,
+# "orguin":78391997,
+# "orgblogid":1196351378,
+# "mention_uins":[ ],
+# "attach":[],"comments":[]}};
+
+
+    
+    #blogDataP = r'var\s+g_oBlogData\s+=.+?(?P<dataJsonStr>\{"data":\{.+?\}\})\s+;';
+    blogDataP = r'var\s+g_oBlogData\s+=.+?(?P<dataJsonStr>\{"data":\{.+?\}\})\s*;';
     blogDataCgiContentP = r"(.+g_oBlogData\.data\.cgiContent\s+?=\s+?'(?P<cgiContent>.+?)';)?";
     wholeBlogDataP = blogDataP + blogDataCgiContentP;
     #logging.info("wholeBlogDataP=%s", wholeBlogDataP);
     
     foundBlogData = re.search(wholeBlogDataP, respHtml, re.S);
     logging.debug("foundBlogData=%s", foundBlogData);
+
     if(foundBlogData) :
         dataJsonStr = foundBlogData.group("dataJsonStr");
         #logging.info("dataJsonStr=%s", dataJsonStr);
