@@ -17,6 +17,17 @@ http://www.crifan.com/files/doc/docbook/python_summary/release/html/python_summa
 [TODO]
 
 [History]
+[v4.5]
+1. add getUrlRespHtml_multiTry
+2. updated formatString
+3. updated decodeHtmlEntity
+4. add filterNonAsciiStr
+5. add filterHtmlTag
+[v4.0]
+1. fixbug of add header in getUrlResponse
+2. add getZipcodeFromLocation
+[v3.8]
+1. add getUrlResponse to support postDataDelimiter.
 [v3.7]
 1. fixbug -> add user-agent for isFileValid
 
@@ -106,7 +117,7 @@ import cookielib;
 import htmlentitydefs;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v3.6";
+__VERSION__ = "v4.4";
 
 gConst = {
     'UserAgent' : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -274,7 +285,23 @@ def decodeHtmlEntity(origHtml, decodedEncoding=""):
     #logging.debug("htmlentitydefs.codepoint2name=%s", htmlentitydefs.codepoint2name);
 
     #http://fredericiana.com/2010/10/08/decoding-html-entities-to-text-in-python/
-    decodedEntityName = re.sub('&(?P<entityName>[a-zA-Z]{2,10});', lambda matched: unichr(htmlentitydefs.name2codepoint[matched.group("entityName")]), origHtml);
+    #decodedEntityName = re.sub('&(?P<entityName>[a-zA-Z]{2,10});', lambda matched: unichr(htmlentitydefs.name2codepoint[matched.group("entityName")]), origHtml);
+    def _nameToCodepoint(matched):
+        logging.debug("matched=%s", matched);
+        wholeStr = matched.group(0);
+        logging.debug("wholeStr=%s", wholeStr);
+        decodedUnicodeChar = "";
+        entityName = matched.group("entityName");
+        logging.debug("entityName=%s", entityName);
+        if(entityName in htmlentitydefs.name2codepoint):
+            decodedCodepoint = htmlentitydefs.name2codepoint[entityName];
+            logging.debug("decodedCodepoint=%s", decodedCodepoint);
+            decodedUnicodeChar = unichr(decodedCodepoint);
+        else:
+            decodedUnicodeChar = wholeStr;
+        logging.debug("decodedUnicodeChar=%s", decodedUnicodeChar);
+        return decodedUnicodeChar;
+    decodedEntityName = re.sub('&(?P<entityName>[a-zA-Z]{2,10});', _nameToCodepoint, origHtml);
     #print "type(decodedEntityName)=",type(decodedEntityName); #type(decodedEntityName)= <type 'unicode'>
     decodedCodepointInt = re.sub('&#(?P<codePointInt>\d{2,5});', lambda matched: unichr(int(matched.group("codePointInt"))), decodedEntityName);
     #print "decodedCodepointInt=",decodedCodepointInt;
@@ -352,7 +379,29 @@ def htmlEntityCodepointToName(htmlWithCodepoint):
     for key in codepointToNameDict.keys() :
         htmlWithEntityName = re.compile(key).sub(codepointToNameDict[key], htmlWithEntityName);
     return htmlWithEntityName;
-    
+def filterHtmlTag(origHtml):
+    """
+    filter html tag, but retain its contents
+    eg:
+        Brooklyn, NY 11220<br />
+        Brooklyn, NY 11220
+        
+        <a href="mailto:Bayridgenissan42@yahoo.com">Bayridgenissan42@yahoo.com</a><br />
+        Bayridgenissan42@yahoo.com
+        
+        <a href="javascript:void(0);" onClick="window.open(new Array('http','',':','//','stores.ebay.com','/Bay-Ridge-Nissan-of-New-York?_rdc=1').join(''), '_blank')">stores.ebay.com</a>
+        stores.ebay.com
+        
+        <a href="javascript:void(0);" onClick="window.open(new Array('http','',':','//','www.carfaxonline.com','/cfm/Display_Dealer_Report.cfm?partner=AXX_0&UID=C367031&vin=JH4KB2F61AC001005').join(''), '_blank')">www.carfaxonline.com</a>
+        www.carfaxonline.com        
+    """
+    filteredHtml = origHtml;
+    filteredHtml = re.sub("<br\s*>", "", filteredHtml, flags=re.I);
+    filteredHtml = re.sub("<br\s*/>", "", filteredHtml, flags=re.I);
+    filteredHtml = re.sub("<a\s+[^<>]+>(?P<aContent>[^<>]+?)</a>", "\g<aContent>", filteredHtml, flags=re.I);
+    filteredHtml = re.sub("<b>(?P<bContent>[^<>]+?)</b>", "\g<bContent>", filteredHtml, re.I);
+    filteredHtml = re.sub("<strong>(?P<strongContent>[^<>]+?)</strong>", "\g<strongContent>", filteredHtml, flags=re.I);
+    return filteredHtml;
 ################################################################################
 # String
 ################################################################################
@@ -361,9 +410,11 @@ def formatString(inputStr, paddingChar="=", totalWidth=80):
     """
     format string, to replace for:
     print '{0:=^80}'.format("xxx");
+    
+    auto added space before and after input string
     """
     formatting = "{0:" + paddingChar + "^" + str(totalWidth) + "}";
-    return formatting.format(inputStr);
+    return formatting.format(" " + inputStr + " ");
     
 
 def genListStr(listValue, encForUniVal="UTF-8", isRetainLastComma = False, delimiter=","):
@@ -642,6 +693,26 @@ def convertToTupleVal(equationStr) :
 
     return (key, value);
 
+def filterNonAsciiStr(originalUnicodeStr):
+    """
+        remove (special) non-ascii (special unicode char)
+        -> avoid save to ascii occur error:
+        UnicodeEncodeError: 'ascii' codec can't encode character u'\u2028' in position 318: ordinal not in range(128)
+        
+        eg:
+        remove \u2028 from
+        Peapack, NJ. \u2028\u2028Mrs. Onassis bought
+        in
+        http://autoexplosion.com/cars/buy/150631.php
+                
+        remove \u201d from
+        OC Choppers Super Stretch 124\u201d Softail
+        in
+        http://autoexplosion.com/bikes/buy/11722.php
+    """
+    filteredAscii = originalUnicodeStr.encode("ascii", 'ignore');
+    filteredUni = filteredAscii.decode("ascii", 'ignore');
+    return filteredUni;
 
 ################################################################################
 # List
@@ -762,6 +833,8 @@ def printCurrentCookies():
         for index, cookie in enumerate(gVal['cj']):
             print "[%d] name=%s,value=%s,domain=%s,path=%s,secure=%s,expires=%s,version=%d"% \
                 (index, cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure, cookie.expires, cookie.version);
+    else:
+        print "no cookie for now";
 
 #------------------------------------------------------------------------------
 def checkAllCookiesExist(cookieNameList, cookieJar) :
@@ -948,7 +1021,7 @@ def manuallyDownloadFile(fileUrl, fileToSave, headerDict=""):
     return isDownOK;
 
 #------------------------------------------------------------------------------
-def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
+def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False, postDataDelimiter="&") :
     """Get response from url, support optional postDict,headerDict,timeout,useGzip
 
     Note:
@@ -961,16 +1034,21 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
     url = str(url);
 
     if (postDict) :
-        postData = urllib.urlencode(postDict);
+        if(postDataDelimiter=="&"):
+            postData = urllib.urlencode(postDict);
+        else:
+            postData = "";
+            for eachKey in postDict.keys() :
+                postData += str(eachKey) + "="  + str(postDict[eachKey]) + postDataDelimiter;
+        postData = postData.strip();
+        #logging.info("postData=%s", postData);
         req = urllib2.Request(url, postData);
+        #logging.info("req=%s", req);
         req.add_header('Content-Type', "application/x-www-form-urlencoded");
     else :
         req = urllib2.Request(url);
 
-    if(headerDict) :
         #print "added header:",headerDict;
-        for key in headerDict.keys() :
-            req.add_header(key, headerDict[key]);
 
     defHeaderDict = {
         'User-Agent'    : gConst['UserAgent'],
@@ -1003,14 +1081,15 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
     #update cookies into local file
     if(gVal['cookieUseFile']):
         gVal['cj'].save();
+        #logging.info("gVal['cj']=%s", gVal['cj']);
     
     return resp;
 
 #------------------------------------------------------------------------------
 # get response html==body from url
 #def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=False) :
-def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=True) :
-    resp = getUrlResponse(url, postDict, headerDict, timeout, useGzip);
+def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=True, postDataDelimiter="&") :
+    resp = getUrlResponse(url, postDict, headerDict, timeout, useGzip, postDataDelimiter);
     respHtml = resp.read();
     if(useGzip) :
         #print "---before unzip, len(respHtml)=",len(respHtml);
@@ -1035,6 +1114,23 @@ def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=True) :
 
     return respHtml;
 
+def getUrlRespHtml_multiTry(url, postDict={}, headerDict={}, timeout=0, useGzip=True, postDataDelimiter="&", maxTryNum=5):
+    """
+        get url response html, multiple try version:
+            if fail, then retry
+    """
+    respHtml = "";
+    for tries in range(maxTryNum) :
+        try :
+            respHtml = getUrlRespHtml(url, postDict, headerDict, timeout, useGzip, postDataDelimiter);
+            break # successfully, so break now
+        except :
+            if tries < (maxTryNum - 1) :
+                continue;
+            else : # last try also failed, so exit
+                logging.error("Has tried %d times to access url %s, all failed!", maxTryNum, url);
+                break;
+    return respHtml;
 
 ################################################################################
 # Image
@@ -1263,6 +1359,81 @@ def transZhcnToEn(strToTrans) :
 
     return (transOK, translatedStr);
 
+def getZipcodeFromLocation(locationStr):
+    """
+        get zip code from location string, especially for USA
+        eg: 
+        intput: Tampa, FL
+        output: 33601
+        
+        input: West Palm Beach, FL
+        output: 33401
+    """
+    zipCode = "";
+    gotZipCode = False;
+    if(not gotZipCode):
+        cityStateList = locationStr.split(",");
+        logging.debug("cityStateList=%s", cityStateList);
+        city = cityStateList[0].strip();
+        state = cityStateList[1].strip();
+        logging.debug("city=%s, state=%s", city, state);
+        zipBaseSearchUrl = "http://autoexplosion.com/templates/zip_search.php";
+        paraDict = {
+            'formname'  : "search",
+            'city'      : city,
+            'state'     : state,
+        };
+        encodedPara = urllib.urlencode(paraDict);
+        logging.debug("encodedPara=%s", encodedPara);
+        zipSearchUrl = zipBaseSearchUrl + "?" + encodedPara;
+        logging.debug("zipSearchUrl=%s", zipSearchUrl);
+        headerDict = {
+            'Referer'   : "http://autoexplosion.com/templates/zip_search.php?formname=search",
+        };
+        zipSearchRespHtml = getUrlRespHtml(zipSearchUrl, headerDict=headerDict);
+        logging.debug("zipSearchRespHtml=%s", zipSearchRespHtml);
+        soup = BeautifulSoup(zipSearchRespHtml);
+        foundZipcode = soup.find(name="td", attrs={"class":"cssTableCellRight"});
+        logging.debug("foundZipcode=%s", foundZipcode);
+        if(foundZipcode):
+            zipCode = foundZipcode.a.string; #78201
+            logging.debug("zipCode=%s", zipCode);
+            gotZipCode = True;
+        else:
+            logging.debug("Failed for method 1, from %s", locationStr);
+            gotZipCode = False;
+    if(not gotZipCode):
+        zipLookupBaseUrl = "https://tools.usps.com/go/ZipLookupAction.action";
+        paraDict ={
+            'mode'      : "0",
+            'tCompany'  : "",
+            'tZip'      : "",
+            'tAddress'  : "",
+            'tApt'      : "",
+            'tCity'     : city,
+            'sState'    : state,
+            'tUrbanCode':"",
+            "zip"       : "",
+        };
+        encodedPara = urllib.urlencode(paraDict);
+        logging.debug("encodedPara=%s", encodedPara);
+        zipLookupUrl = zipLookupBaseUrl + "?" + encodedPara;
+        logging.debug("zipLookupUrl=%s", zipLookupUrl);
+        headerDict = {
+            'Referer'   : "https://tools.usps.com/go/ZipLookupAction_input",
+        };
+        zipLookupRespHtml = getUrlRespHtml(zipLookupUrl, headerDict=headerDict);
+        soup = BeautifulSoup(zipLookupRespHtml);
+        foundZip = soup.find(name="span", attrs={"class":"zip", "style":""});
+        logging.debug("foundZip=%s", foundZip);
+        if(foundZip):
+            zipCode = foundZip.string; #33401
+            logging.debug("zipCode=%s", zipCode);
+            gotZipCode = True;
+        else:
+            logging.debug("Failed for method 2, from %s", locationStr);
+            gotZipCode = False; 
+    return zipCode;
 
 ################################################################################
 # BeautifulSoup

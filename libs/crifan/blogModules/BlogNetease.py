@@ -9,7 +9,17 @@ For BlogsToWordpress, this file contains the functions for Netease 163 blog.
 2. support modify 163 post
 
 [History]
-v1.4:
+[v1.7]
+1. add emotion into post
+eg:
+http://blog.163.com/ni_chen/blog/#m=1
+-> 心情随笔
+2.support direct input feeling card url:
+BlogsToWordpress.py -f http://green-waste.blog.163.com/blog/#m=1
+BlogsToWordpress.py -f http://blog.163.com/ni_chen/blog/#m=1
+[v1.5]
+1. update to fix bug: can not find first permanent link
+[v1.4]
 1. change charset from invalid GB18030 to valid UTF-8 when modify post.
 
 """
@@ -33,7 +43,7 @@ import StringIO;
 
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.4";
+__VERSION__ = "v1.7";
 
 gConst = {
     'blogApi163'        : "http://api.blog.163.com",
@@ -46,6 +56,13 @@ gVal = {
     'cj'            : None, # cookiejar, to store cookies for login mode
     
     'importedPil'   : False,
+    'userId'        : '',   # for http://blog.163.com/ni_chen/, its user id is 186541395
+    'special': {
+        'feelingCard': {
+            'url'       : "",   # need updated after got blogUser, to: 
+            'processed' : False,
+        }
+    }
 }
 
 ################################################################################
@@ -82,10 +99,10 @@ def extratMainCmtNum(dwrEngine) :
         mainCmtNum = 0;
     return mainCmtNum;
 
-#------------------------------------------------------------------------------
-# generate request comment URL from blog item URL
-def genReqCmtUrl(soup, startCmtIdx, onceGetNum):   
-    getCmtUrl = ''
+def getPlaincallRespDwrStr(c0ScriptName, c0MethodName, c0Param0, c0Param1, c0Param2):
+    """
+        get FeelingsBeanNew response DWR string
+    """
 
     # http://api.blog.163.com/againinput4/dwr/call/plaincall/BlogBeanNew.getComments.dwr
     # --- example ---
@@ -103,41 +120,43 @@ def genReqCmtUrl(soup, startCmtIdx, onceGetNum):
     # [url]
     #http://api.blog.163.com/againinput4/dwr/call/plaincall/BlogBeanNew.getComments.dwr?&callCount=1&scriptSessionId=${scriptSessionId}187&c0-scriptName=BlogBeanNew&c0-methodName=getComments&c0-id=0&c0-param0=string:fks_094067082083086070082083080095085081083068093095082074085&c0-param1=number:1&c0-param2=number:0&batchId=728048
 
-    try :
-        # extract the fks string
-        fskClassInfo = soup.find(attrs={"class":"phide nb-init"});
-        textareaJs = fskClassInfo.find(attrs={"name":"js"});
-        fksStr = textareaJs.contents[0];
-        matched = re.search(r"id:'(?P<id>fks_\d+)',", fksStr);
-        foundFks = matched.group("id");
-        logging.debug("Found fks %s", foundFks);
-
-        # Note: here not use urllib.urlencode to encode para, 
-        #       for the encoded result will convert some special chars($,:,{,},...) into %XX
-        paraDict = {
-            'callCount'     :   '1',
-            'scriptSessionId':  '${scriptSessionId}187',
-            'c0-scriptName' :   'BlogBeanNew',
-            'c0-methodName' :   'getComments',
-            'c0-id'         :   '0',
-            'c0-param0'     :   '',
-            'c0-param1'     :   '',
-            'c0-param2'     :   '',
-            'batchId'       :   '1',
-        };
-        paraDict['c0-param0'] = "string:" + str(foundFks);
-        paraDict['c0-param1'] = "number:" + str(onceGetNum);
-        paraDict['c0-param2'] = "number:" + str(startCmtIdx);
-        
-        mainUrl = gConst['blogApi163'] + '/' + gVal['blogUser'] + '/dwr/call/plaincall/BlogBeanNew.getComments.dwr';
-        getCmtUrl = crifanLib.genFullUrl(mainUrl, paraDict);
-        
-        logging.debug("getCmtUrl=%s", getCmtUrl);
-    except :
-        getCmtUrl = "";
-        logging.debug("Fail to generate comment url");
     
-    return getCmtUrl;
+        # extract the fks string
+    # http://api.blog.163.com/againinput4/dwr/call/plaincall/BlogBeanNew.getBlogs.dwr
+    # callCount=1
+    # scriptSessionId=${scriptSessionId}187
+    # c0-scriptName=BlogBeanNew
+    # c0-methodName=getBlogs
+    # c0-id=0
+
+    logging.debug("get FeelingsBeanNew reponse DWR string for c0MethodName=%s, c0Param0=%s, c0Param1=%s, c0Param2=%s", c0MethodName, c0Param0, c0Param1, c0Param2);
+        #       for the encoded result will convert some special chars($,:,{,},...) into %XX
+    postDict = {
+        'callCount'     :   '1',
+        'scriptSessionId':  '${scriptSessionId}187',
+        'c0-scriptName' :   c0ScriptName, #BlogBeanNew/FeelingsBeanNew
+        'c0-methodName' :   c0MethodName, #getComments/getRecentFeelingsComment/getRecentFeelingCards
+        'c0-id'         :   '0',
+        'c0-param0'     :   c0Param0,
+        'c0-param1'     :   c0Param1,
+        'c0-param2'     :   c0Param2,
+        'batchId'       :   '1', # should random generate number?
+    };
+    #http://api.blog.163.com/againinput4/dwr/call/plaincall/BlogBeanNew.getComments.dwr
+    #http://api.blog.163.com/ni_chen/dwr/call/plaincall/FeelingsBeanNew.getRecentFeelingsComment.dwr
+    #http://api.blog.163.com/ni_chen/dwr/call/plaincall/FeelingsBeanNew.getRecentFeelingCards.dwr
+        
+    plaincallDwrUrl = gConst['blogApi163'] + '/' + gVal['blogUser'] + '/' + "dwr/call/plaincall/" + c0ScriptName + "." + c0MethodName + ".dwr";
+    logging.debug("plaincallDwrUrl=%s", plaincallDwrUrl);
+        
+    #Referer	http://api.blog.163.com/crossdomain.html?t=20100205
+    headerDict = {
+        'Referer'       :   "http://api.blog.163.com/crossdomain.html?t=20100205",
+        'Content-Type'  :   "text/plain",
+    };
+    plaincallRespDwrStr = crifanLib.getUrlRespHtml(plaincallDwrUrl, postDict=postDict, headerDict=headerDict, postDataDelimiter='\r\n');
+    logging.debug("plaincallRespDwrStr=%s", plaincallRespDwrStr);
+    return plaincallRespDwrStr;
 
 #------------------------------------------------------------------------------
 # replace the character entity references into slash + u + code point
@@ -258,7 +277,7 @@ def parseCmtRespStr(line, cmtCurNum) :
         line = validateString(line);
         afterValidateLine = line;
     
-        line = crifanLib.replaceStrEntToNumEnt(line);
+        line = crifanLib.htmlEntityNameToCodepoint(line);
         afterStrEntToNumLine = line;
         
         # (2) replace number entity into \uXXXX:        &#10084; -> \u2764
@@ -405,6 +424,19 @@ def parseCmtRespInfo(cmtResp, url, startCmtNum):
 
     return (retCmtDictList, mainCmtNum);
 
+def findFksValue(soup):
+    """
+        From 163 post html's soup, find the fks value
+        eg:
+        fks_094067082083086070082083080095085081083068093095082074085
+    """
+    fskClassInfo = soup.find(attrs={"class":"phide nb-init"});
+    textareaJs = fskClassInfo.find(attrs={"name":"js"});
+    fksStr = textareaJs.contents[0];
+    foundFks = re.search(r"id:'(?P<id>fks_\d+)',", fksStr);
+    fksValue = foundFks.group("id");
+    logging.debug("fks value %s", fksValue);
+    return fksValue;
 #------------------------------------------------------------------------------
 # get comments for input url of one blog item
 # return the converted dict value
@@ -419,8 +451,15 @@ def fetchComments(url, soup):
     
     try :
         while needGetMoreCmt :
-            cmtUrl = genReqCmtUrl(soup, startCmtIdx, onceGetNum);
-            cmtRetInfo = crifanLib.getUrlRespHtml(cmtUrl);
+            # cmtUrl = genReqCmtUrl(soup, startCmtIdx, onceGetNum);
+            # cmtRetInfo = crifanLib.getUrlRespHtml(cmtUrl);
+            fksValue = findFksValue(soup);
+            c0ScriptName = "BlogBeanNew";
+            c0MethodName = "getComments";
+            c0Param0 = "string:" + str(fksValue);
+            c0Param1 = "number:" + str(onceGetNum);
+            c0Param2 = "number:" + str(startCmtIdx);
+            cmtRetInfo = getPlaincallRespDwrStr(c0ScriptName, c0MethodName, c0Param0, c0Param1, c0Param2)
             
             #logging.debug("---------got comment original response ------------\n%s", cmtRetInfo);
             
@@ -446,6 +485,381 @@ def fetchComments(url, soup):
 
     return cmtList;
 
+def fetchComments_feelingCard():
+    """
+        Get feeling card items, to use as comments
+    """
+    totalCmtDictList = [];
+    totalMainCmtDictList = [];
+    totalSubCmtDictList = [];
+    needGetMore = True;
+    startIdx = 0;
+    startNum = 1;
+    onceGetNum = 1000; # get 1000 items once
+    try :
+        while needGetMore :
+            
+            # callCount=1
+            # scriptSessionId=${scriptSessionId}187
+            # c0-scriptName=FeelingsBeanNew
+            # c0-methodName=getRecentFeelingCards
+            # c0-id=0
+            # c0-param0=number:186541395
+            # c0-param1=number:0
+            # c0-param2=number:20
+            # batchId=292545
+            getRecentFeelingCardsRespDwrStr = getPlaincallRespDwrStr(   "FeelingsBeanNew",
+                                                                        "getRecentFeelingCards",
+                                                                        "number:" + str(gVal['userId']),
+                                                                        "number:" + str(startIdx),
+                                                                        "number:" + str(onceGetNum));
+            logging.debug("getRecentFeelingCardsRespDwrStr=%s", getRecentFeelingCardsRespDwrStr);
+            curMainCmtDictList = parseMainCmtDwrStrToMainCmtDictList(getRecentFeelingCardsRespDwrStr);
+            totalMainCmtDictList.extend(curMainCmtDictList);
+            
+            curGotMainCmtNum = len(curMainCmtDictList);
+            if(curGotMainCmtNum < onceGetNum):
+                #has got all comment, so quit
+                needGetMore = False;
+                logging.debug("Request %d comments, but only response %d comments, so no more comments, has got all comments", onceGetNum, curGotMainCmtNum);
+        logging.debug("Total got %d main comments dict", len(totalMainCmtDictList));
+        totalCmtDictList.extend(totalMainCmtDictList);
+        logging.debug("Total comments %d", len(totalCmtDictList));
+        for eachMainCmtDict in totalMainCmtDictList:
+            mainCommentCount = eachMainCmtDict['mainCommentCount'];
+            mainCommentCountInt = int(mainCommentCount);
+            if(mainCommentCountInt > 0):
+                logging.debug("[%d] main comment has sub %d comments", eachMainCmtDict['curCmtIdx'], mainCommentCountInt);
+                subCmtDwrStr = getFeelingCardSubCmtDwrStr(eachMainCmtDict['id']);
+                curSubCmtDictList = parseSubCmtDwrStrToSubCmtDictList(subCmtDwrStr);
+                totalSubCmtDictList.extend(curSubCmtDictList);
+        logging.debug("Total got %d sub comment dict", len(totalSubCmtDictList));
+        if(totalSubCmtDictList):
+            subCmtStartIdx = len(totalMainCmtDictList);
+            logging.debug("subCmtStartIdx=%d", subCmtStartIdx);
+            for idx,eachSubCmtDict in enumerate(totalSubCmtDictList):
+                eachSubCmtDict['curCmtIdx'] = subCmtStartIdx + idx;
+                eachSubCmtDict['curCmtNum'] = eachSubCmtDict['curCmtIdx'] + 1;
+            
+            logging.debug("done for update sub comment index");
+            #update sub comment's parent relation
+            for idx,eachSubCmtDict in enumerate(totalSubCmtDictList):
+                subCmtParentId = eachSubCmtDict['cardId'];
+                for eachMainCmtDict in totalMainCmtDictList:
+                    mainCmtId = eachMainCmtDict['id'];
+                    if(subCmtParentId == mainCmtId):
+                        logging.debug("sub cmt id=%s 's parent's id=%s, parent curCmtNum=%d", eachSubCmtDict['id'], mainCmtId, eachMainCmtDict['curCmtNum']);
+                        eachSubCmtDict['parentCmtNum'] = eachMainCmtDict['curCmtNum'];
+                #s0.replyComId="-1";
+                curSubCmtReplyComId = eachSubCmtDict['replyComId']; #
+                for singleSubCmtDict in totalSubCmtDictList:
+                    subCmtId = singleSubCmtDict['id'];
+                    subCmtCurCmtNum = singleSubCmtDict['curCmtNum'];
+                    if(curSubCmtReplyComId == subCmtId):
+                        logging.debug("sub cmt id=%s 's replyComId=%s, find correspoinding parent (sub) comment, whose curCmtNum=%d", subCmtId, curSubCmtReplyComId, subCmtCurCmtNum);
+                        eachSubCmtDict['parentCmtNum'] = subCmtCurCmtNum;
+                
+            logging.debug("done for update sub comment's parent relation");
+            totalCmtDictList.extend(totalSubCmtDictList);
+    except :
+        logging.debug("Fail for fetch the feeling card (index=[%d-%d]) for %s ", startIdx, startIdx + onceGetNum - 1, url);
+    return totalCmtDictList;
+def getFeelingCardSubCmtDwrStr(subCmtId):
+    """
+        input sub comment id, return sub comment response dwr string
+    """
+    logging.debug("get sub comment for %s", subCmtId);
+    getRecentFeelingsCommentRespDwrStr = getPlaincallRespDwrStr(    "FeelingsBeanNew",
+                                                                    "getRecentFeelingsComment",
+                                                                    "string:" + str(subCmtId),
+                                                                    "number:1",
+                                                                    "number:0");
+    logging.debug("getRecentFeelingsCommentRespDwrStr=%s", getRecentFeelingsCommentRespDwrStr);
+    return getRecentFeelingsCommentRespDwrStr;
+def parseSingleDwrStrToCmtDict(singleCmtDwrStr):
+    """
+        parse single comment dwr string, main comment or sub comment, to comment dict
+    """
+    logging.debug("singleCmtDwrStr=%s", singleCmtDwrStr);
+    curCmtDict = {};
+    singleMainCmtDict = {
+        'curCmtIdx'         : 0,
+        'curCmtNum'         : 0,
+        'parentCmtNum'      : 0,
+        'isSubComment'      : False,
+        'commentCount'      : "",
+        'mainCommentCount'  : "",
+        'moodType'          : "",
+        'userAvatar'        : "",
+        'userAvatarUrl'     : "",
+        'userName'          : "",
+        'userNickname'      : "",
+        'content'           : "",
+        'id'                : "",
+        'moveFrom'          : "",
+        'publishTime'       : "",
+        'synchMiniBlog'     : "",
+        'userId'            : "",
+    };
+    singleSubCmtDict = {
+        'curCmtIdx'         : 0,
+        'curCmtNum'         : 0,
+        'parentCmtNum'      : 0,
+        'isSubComment'      : True,
+        'cardId'            : "", # is parent ID
+        'ip'                : "",
+        'ipName'            : "",
+        'lastUpdateTime'    : "",
+        'mainComId'         : "",
+        'popup'             : "",
+        'publisherAvatar'   : "",
+        'publisherAvatarUrl': "",
+        'publisherId'       : "",
+        'publisherName'     : "",
+        'publisherNickname' : "",
+        'publisherUrl'      : "",
+        'replyComId'        : "",
+        'replyToUserId'     : "",
+        'replyToUserName'   : "",
+        'replyToUserNick'   : "",
+        'spam'              : "",
+        'subComments'       : "",
+        'valid'             : "",
+        'content'           : "",
+        'id'                : "",
+        'moveFrom'          : "",
+        'publishTime'       : "",
+        'synchMiniBlog'     : "",
+        'userId'            : "",
+    };
+    foundCardId = re.search("^s\d+\.cardId=", singleCmtDwrStr);
+    if(foundCardId):
+        curCmtDict = singleSubCmtDict;
+        curCmtDict['isSubComment'] = True;
+        logging.debug("------- is sub comments");
+    else:
+        curCmtDict = singleMainCmtDict;
+        curCmtDict['isSubComment'] = False;
+        logging.debug("======= is main comments");
+    foundCurCmtIdx = re.search(r's(?P<curCmtIdx>\d+)\.content=".+?";s\1\.id="', singleCmtDwrStr);
+    logging.debug("foundCurCmtIdx=%s", foundCurCmtIdx);
+    curCmtIdx = foundCurCmtIdx.group("curCmtIdx");
+    curCmtIdx = int(curCmtIdx);
+    logging.debug("curCmtIdx=%d", curCmtIdx);
+    if(not curCmtDict['isSubComment']):
+        curCmtDict['curCmtIdx'] = curCmtIdx;
+        curCmtDict['curCmtNum'] = curCmtIdx + 1;
+    strSn = "s" + str(curCmtIdx);
+    foundContent = re.search(strSn + '\.content=(?P<content>.+?);' + strSn + '\.id="', singleCmtDwrStr);
+    content = foundContent.group("content");
+    content = content.decode("unicode-escape");
+    curCmtDict['content'] = content;
+    logging.debug("content=%s", content);
+    foundId = re.search(strSn + '\.id="(?P<id>\d+)";', singleCmtDwrStr);
+    id = foundId.group("id");
+    curCmtDict['id'] = id;
+    logging.debug("id=%s", id);
+    foundMoveFrom = re.search(strSn + '\.moveFrom="?(?P<moveFrom>[^"]*?)"?;', singleCmtDwrStr);
+    moveFrom = foundMoveFrom.group("moveFrom");
+    curCmtDict['moveFrom'] = moveFrom;
+    logging.debug("moveFrom=%s", moveFrom);
+    foundPublishTime = re.search(strSn + '\.publishTime=(?P<publishTime>\d+);', singleCmtDwrStr);
+    publishTime = foundPublishTime.group("publishTime");
+    curCmtDict['publishTime'] = publishTime;
+    logging.debug("publishTime=%s", publishTime);
+    foundSynchMiniBlog = re.search(strSn + '\.synchMiniBlog=(?P<synchMiniBlog>.+?);', singleCmtDwrStr);
+    synchMiniBlog = foundSynchMiniBlog.group("synchMiniBlog");
+    curCmtDict['synchMiniBlog'] = synchMiniBlog;
+    logging.debug("synchMiniBlog=%s", synchMiniBlog);
+    foundUserId = re.search(strSn + '\.userId=(?P<userId>\d+);', singleCmtDwrStr);
+    userId = foundUserId.group("userId");
+    curCmtDict['userId'] = userId;
+    logging.debug("userId=%s", userId);
+    if(curCmtDict['isSubComment']):
+        foundCardId = re.search(strSn + '\.cardId="?(?P<cardId>.*?)"?;', singleCmtDwrStr);
+        cardId = foundCardId.group("cardId");
+        curCmtDict['cardId'] = cardId;
+        logging.debug("cardId=%s", cardId);
+        foundIp = re.search(strSn + '\.ip="?(?P<ip>.*?)"?;', singleCmtDwrStr);
+        ip = foundIp.group("ip");
+        if(not re.search("\d+\.\d+\.\d+\.\d+", ip)):
+            ip = "";
+        curCmtDict['ip'] = ip;
+        logging.debug("ip=%s", ip);
+        foundIpName = re.search(strSn + '\.ipName=(?P<ipName>.+?);', singleCmtDwrStr);
+        ipName = foundIpName.group("ipName");
+        curCmtDict['ipName'] = ipName;
+        logging.debug("ipName=%s", ipName);
+        foundLastUpdateTime = re.search(strSn + '\.lastUpdateTime=(?P<lastUpdateTime>\d+);', singleCmtDwrStr);
+        lastUpdateTime = foundLastUpdateTime.group("lastUpdateTime");
+        curCmtDict['lastUpdateTime'] = lastUpdateTime;
+        logging.debug("lastUpdateTime=%s", lastUpdateTime);
+        foundMainComId = re.search(strSn + '\.mainComId="?(?P<mainComId>.*?)"?;', singleCmtDwrStr);
+        mainComId = foundMainComId.group("mainComId");
+        curCmtDict['mainComId'] = mainComId;
+        logging.debug("mainComId=%s", mainComId);
+        foundPopup = re.search(strSn + '\.popup=(?P<popup>.+?);', singleCmtDwrStr);
+        popup = foundPopup.group("popup");
+        curCmtDict['popup'] = popup;
+        logging.debug("popup=%s", popup);
+        foundPublisherAvatar = re.search(strSn + '\.publisherAvatar=(?P<publisherAvatar>\d+);', singleCmtDwrStr);
+        publisherAvatar = foundPublisherAvatar.group("publisherAvatar");
+        curCmtDict['publisherAvatar'] = publisherAvatar;
+        logging.debug("publisherAvatar=%s", publisherAvatar);
+        foundPublisherAvatarUrl = re.search(strSn + '\.publisherAvatarUrl="?(?P<publisherAvatarUrl>.*?)"?;', singleCmtDwrStr);
+        publisherAvatarUrl = foundPublisherAvatarUrl.group("publisherAvatarUrl");
+        curCmtDict['publisherAvatarUrl'] = publisherAvatarUrl;
+        logging.debug("publisherAvatarUrl=%s", publisherAvatarUrl);
+        foundPublisherId = re.search(strSn + '\.publisherId=(?P<publisherId>\d+);', singleCmtDwrStr);
+        publisherId = foundPublisherId.group("publisherId");
+        curCmtDict['publisherId'] = publisherId;
+        logging.debug("publisherId=%s", publisherId);
+        foundPublisherName = re.search(strSn + '\.publisherName="?(?P<publisherName>.*?)"?;', singleCmtDwrStr);
+        publisherName = foundPublisherName.group("publisherName");
+        curCmtDict['publisherName'] = publisherName;
+        logging.debug("publisherName=%s", publisherName);
+        foundPublisherNickname = re.search(strSn + '\.publisherNickname="?(?P<publisherNickname>.*?)"?;', singleCmtDwrStr);
+        publisherNickname = foundPublisherNickname.group("publisherNickname");
+        publisherNicknameUni = publisherNickname.decode('unicode-escape');
+        curCmtDict['publisherNickname'] = publisherNicknameUni;
+        logging.debug("publisherNickname=%s", publisherNickname);
+        foundPublisherUrl = re.search(strSn + '\.publisherUrl="?(?P<publisherUrl>.*?)"?;', singleCmtDwrStr);
+        publisherUrl = foundPublisherUrl.group("publisherUrl");
+        curCmtDict['publisherUrl'] = publisherUrl;
+        logging.debug("publisherUrl=%s", publisherUrl);
+        foundReplyComId = re.search(strSn + '\.replyComId="?(?P<replyComId>.*?)"?;', singleCmtDwrStr);
+        replyComId = foundReplyComId.group("replyComId");
+        curCmtDict['replyComId'] = replyComId;
+        logging.debug("replyComId=%s", replyComId);
+        foundReplyToUserId = re.search(strSn + '\.replyToUserId=(?P<replyToUserId>\d+);', singleCmtDwrStr);
+        replyToUserId = foundReplyToUserId.group("replyToUserId");
+        curCmtDict['replyToUserId'] = replyToUserId;
+        logging.debug("replyToUserId=%s", replyToUserId);
+        foundReplyToUserName = re.search(strSn + '\.replyToUserName="?(?P<replyToUserName>.*?)"?;', singleCmtDwrStr);
+        replyToUserName = foundReplyToUserName.group("replyToUserName");
+        curCmtDict['replyToUserName'] = replyToUserName;
+        logging.debug("replyToUserName=%s", replyToUserName);
+        foundReplyToUserNick = re.search(strSn + '\.replyToUserNick="?(?P<replyToUserNick>.*?)"?;', singleCmtDwrStr);
+        replyToUserNick = foundReplyToUserNick.group("replyToUserNick");
+        curCmtDict['replyToUserNick'] = replyToUserNick;
+        logging.debug("replyToUserNick=%s", replyToUserNick);
+        foundSpam = re.search(strSn + '\.spam=(?P<spam>\d+);', singleCmtDwrStr);
+        spam = foundSpam.group("spam");
+        curCmtDict['spam'] = spam;
+        logging.debug("spam=%s", spam);
+        foundSubComments = re.search(strSn + '\.subComments=(?P<subComments>.+?);', singleCmtDwrStr);
+        subComments = foundSubComments.group("subComments");
+        curCmtDict['subComments'] = subComments;
+        logging.debug("subComments=%s", subComments);
+        foundValid = re.search(strSn + '\.valid=(?P<valid>\d+);', singleCmtDwrStr);
+        valid = foundValid.group("valid");
+        curCmtDict['valid'] = valid;
+        logging.debug("valid=%s", valid);
+    else:
+        foundCommentCount = re.search(strSn + '\.commentCount=(?P<commentCount>\d+);', singleCmtDwrStr);
+        commentCount = foundCommentCount.group("commentCount");
+        curCmtDict['commentCount'] = commentCount;
+        logging.debug("commentCount=%s", commentCount);
+        foundMainCommentCount = re.search(strSn + '\.mainCommentCount=(?P<mainCommentCount>\d+);', singleCmtDwrStr);
+        mainCommentCount = foundMainCommentCount.group("mainCommentCount");
+        curCmtDict['mainCommentCount'] = mainCommentCount;
+        logging.debug("mainCommentCount=%s", mainCommentCount);
+        foundMoodType = re.search(strSn + '\.moodType=(?P<moodType>\d+);', singleCmtDwrStr);
+        moodType = foundMoodType.group("moodType");
+        curCmtDict['moodType'] = moodType;
+        logging.debug("moodType=%s", moodType);
+        foundUserAvatar = re.search(strSn + '\.userAvatar=(?P<userAvatar>\d+);', singleCmtDwrStr);
+        userAvatar = foundUserAvatar.group("userAvatar");
+        curCmtDict['userAvatar'] = userAvatar;
+        logging.debug("userAvatar=%s", userAvatar);
+        foundUserAvatarUrl = re.search(strSn + '\.userAvatarUrl="?(?P<userAvatarUrl>http://.+?)"?;', singleCmtDwrStr);
+        userAvatarUrl = foundUserAvatarUrl.group("userAvatarUrl");
+        curCmtDict['userAvatarUrl'] = userAvatarUrl;
+        logging.debug("userAvatarUrl=%s", userAvatarUrl);
+        foundUserName = re.search(strSn + '\.userName="?(?P<userName>.+?)"?;', singleCmtDwrStr);
+        userName = foundUserName.group("userName");
+        curCmtDict['userName'] = userName;
+        logging.debug("userName=%s", userName);
+        foundUserNickname = re.search(strSn + '\.userNickname="?(?P<userNickname>.+?)"?;', singleCmtDwrStr);
+        userNickname = foundUserNickname.group("userNickname");
+        curCmtDict['userNickname'] = userNickname;
+        logging.debug("userNickname=%s", userNickname);
+    return curCmtDict;
+def parseSubCmtDwrStrToSubCmtDictList(subCmtDwrStr):
+    """
+        parse sub comment dwr string to sub comment dict list
+            split to single sub comment dwr string list
+            convert each sub comment dwr string to dict
+    """
+    subCmtDictList = [];
+    subCmtStrList = re.findall(r's\d+\.cardId=.+?s\d+\.valid=\d+;(?:\s)', subCmtDwrStr);
+    logging.debug("len(subCmtStrList)=%d", len(subCmtStrList));
+    if(subCmtStrList):
+        for singleSubCmtDwrStr in subCmtStrList:
+            singleSubCmtDict = parseSingleDwrStrToCmtDict(singleSubCmtDwrStr);
+            subCmtDictList.append(singleSubCmtDict);
+    return subCmtDictList;
+def parseMainCmtDwrStrToMainCmtDictList(respDwrReplyStr):
+    """
+        Parse main comment response DWR-REPLY string, into comment dict list
+    """
+    commentDictList = [];
+    mainCmtDwrStrList = [];
+    mainCmtDwrStrList = re.findall(r's\d+\.commentCount=.+?s\d+\.userNickname=".+?";(?:\s)', respDwrReplyStr);
+    logging.debug("len(mainCmtDwrStrList)=%d", len(mainCmtDwrStrList));
+    if(mainCmtDwrStrList):
+        for eachMainCmtDwrStr in mainCmtDwrStrList:
+            singleMainCmtDict = parseSingleDwrStrToCmtDict(eachMainCmtDwrStr);
+            commentDictList.append(singleMainCmtDict);
+    return commentDictList;
+def fillComments_fellingCard(destCmtDict, srcCmtDict):
+    """
+        fill source comments dictionary into destination comments dictionary
+            note:
+            here srcCmtDict may be is main comment dict or sub comment dict
+    """
+    logging.debug("--------- source comment: idx=%d, num=%d ---------", srcCmtDict['curCmtIdx'], srcCmtDict['curCmtNum']);
+    destCmtDict['id'] = srcCmtDict['curCmtNum'];
+    if(srcCmtDict['isSubComment']):
+        destCmtDict['author'] = srcCmtDict['publisherNickname'];
+    else:
+        destCmtDict['author'] = srcCmtDict['userNickname'];
+    if(srcCmtDict['isSubComment']):
+        destCmtDict['author_email'] = srcCmtDict['publisherName'];#s0.publisherName="chenlin198412@126";
+    else:
+        destCmtDict['author_email'] = "";
+    if(srcCmtDict['isSubComment']):
+        destCmtDict['author_url'] = saxutils.escape(genNeteaseUserUrl(srcCmtDict['publisherName']));
+    else:
+        destCmtDict['author_url'] = saxutils.escape(gVal['blogEntryUrl']);
+    if(srcCmtDict['isSubComment']):
+        destCmtDict['author_IP'] = srcCmtDict['ip'];
+    else:
+        destCmtDict['author_IP'] = "";
+    
+    publishTimeStr = srcCmtDict['publishTime'];
+    publishTimeStrInt = int(publishTimeStr);
+    publishTimeStrIntSec = publishTimeStrInt/1000;
+    publishTimeStrIntSecStr = str(publishTimeStrIntSec);
+    localTime = crifanLib.timestampToDatetime(publishTimeStrIntSecStr);
+    gmtTime = crifanLib.convertLocalToGmt(localTime);
+    destCmtDict['date'] = localTime.strftime("%Y-%m-%d %H:%M:%S");
+    destCmtDict['date_gmt'] = gmtTime.strftime("%Y-%m-%d %H:%M:%S");
+    cmtContent = srcCmtDict['content'];
+    destCmtDict['content'] = cmtContent;
+    destCmtDict['approved'] = 1;
+    destCmtDict['type'] = '';
+    destCmtDict['parent'] = srcCmtDict['parentCmtNum'];
+    destCmtDict['user_id'] = 0;
+    logging.debug("author=%s", destCmtDict['author']);
+    logging.debug("author_email=%s", destCmtDict['author_email']);
+    logging.debug("author_IP=%s", destCmtDict['author_IP']);
+    logging.debug("author_url=%s", destCmtDict['author_url']);
+    logging.debug("date=%s", destCmtDict['date']);
+    logging.debug("date_gmt=%s", destCmtDict['date_gmt']);
+    logging.debug("content=%s", destCmtDict['content']);
+    logging.debug("parent=%s", destCmtDict['parent']);
+    return destCmtDict;
 #------------------------------------------------------------------------------
 # check whether the input 163 blog user is other type user:
 # (1) jdidi155@126     in http://blog.163.com/jdidi155@126
@@ -541,10 +955,7 @@ def fillComments(destCmtDict, srcCmtDict):
 
 #------------------------------------------------------------------------------
 # generate get blogs URL
-def genGetBlogsUrl(userId, startBlogIdx, onceGetNum):
-    getBlogsUrl = '';
 
-    try :
         # http://api.blog.163.com/againinput4/dwr/call/plaincall/BlogBeanNew.getBlogs.dwr
         # callCount=1
         # scriptSessionId=${scriptSessionId}187
@@ -556,29 +967,9 @@ def genGetBlogsUrl(userId, startBlogIdx, onceGetNum):
         # c0-param2=number:20
         # batchId=955290
 
-        paraDict = {
-            'callCount'     :   '1',
-            'scriptSessionId':  '${scriptSessionId}187',
-            'c0-scriptName' :   'BlogBeanNew',
-            'c0-methodName' :   'getBlogs',
-            'c0-id'         :   '0',
-            'c0-param0'     :   '',
-            'c0-param1'     :   '',
-            'c0-param2'     :   '',
-            'batchId'       :   '1',
-        };
-        paraDict['c0-param0'] = "number:" + str(userId);
-        paraDict['c0-param1'] = "number:" + str(startBlogIdx);
-        paraDict['c0-param2'] = "number:" + str(onceGetNum);
         
-        mainUrl = gConst['blogApi163'] + '/' + gVal['blogUser'] + '/' + 'dwr/call/plaincall/BlogBeanNew.getBlogs.dwr';
-        getBlogsUrl = crifanLib.genFullUrl(mainUrl, paraDict);
 
-        logging.debug("Generated get blogs url %s", getBlogsUrl);
-    except :
-        logging.debug("Can not generate get blog url.");
 
-    return getBlogsUrl;
 
 #------------------------------------------------------------------------------
 # extract the 'permaSerial' filed from the single response blog string
@@ -648,13 +1039,16 @@ def findRealFirstPermaLink(blogEntryUrl, permaSerial) :
 def extractTitle(url, html):
     (needOmit, titleUni) = (False, "");
     try :
-        soup = htmlToSoup(html);
-        foundTitle = soup.find(attrs={"class":"tcnt"});
+        if(url == gVal['special']['feelingCard']['url']):
+            titleUni = unicode(gVal['blogUser']) + u"的心情随笔";
+        else:
+            soup = htmlToSoup(html);
+            foundTitle = soup.find(attrs={"class":"tcnt"});
         
         # foundTitle should not empty
         # foundTitle.string is unicode type here
-        titleStr = foundTitle.string.strip();
-        titleUni = unicode(titleStr);
+            titleStr = foundTitle.string.strip();
+            titleUni = unicode(titleStr);
         logging.debug("Extrated title=%s", titleUni);
     except : 
         (needOmit, titleUni) = (False, "");
@@ -667,9 +1061,15 @@ def extractTitle(url, html):
 def extractDatetime(url, html) :
     datetimeStr = '';
     try :
-        soup = htmlToSoup(html);
-        foundDatetime = soup.find(attrs={"class":"blogsep"});
-        datetimeStr = foundDatetime.string.strip(); #2010-11-15 09:44:12
+        if(url == gVal['special']['feelingCard']['url']):
+            currentDatetime = datetime.now();
+            logging.debug("currentDatetime=%s", currentDatetime);
+            datetimeStr = currentDatetime.strftime('%Y-%m-%d %H:%M:%S');
+            logging.debug("datetimeStr=%s", datetimeStr);
+        else:
+            soup = htmlToSoup(html);
+            foundDatetime = soup.find(attrs={"class":"blogsep"});
+            datetimeStr = foundDatetime.string.strip(); #2010-11-15 09:44:12
     except :
         datetimeStr = "";
         
@@ -681,8 +1081,11 @@ def extractDatetime(url, html) :
 def extractContent(url, html) :
     contentStr = '';
     try :
-        soup = htmlToSoup(html);
-        foundContent = soup.find(attrs={"class":"bct fc05 fc11 nbw-blog ztag"});
+        if(url == gVal['special']['feelingCard']['url']):
+            contentStr = u"当前帖子是专门为心情随笔新建，内容为空。所有的心情随笔的内容，都在此帖子的评论中。";
+        else:
+            soup = htmlToSoup(html);
+            foundContent = soup.find(attrs={"class":"bct fc05 fc11 nbw-blog ztag"});
 
         # note: 
         # here must use BeautifulSoup-3.0.6.py
@@ -690,8 +1093,8 @@ def extractContent(url, html) :
         # process some kind of string will fail when use CData
         # eg: http://benbenwo1091.blog.163.com/blog/static/26634402200842202442518/
         # CData for foundContent.contents[11] will fail
-        mappedContents = map(CData, foundContent.contents);
-        contentStr = ''.join(mappedContents);
+            mappedContents = map(CData, foundContent.contents);
+            contentStr = ''.join(mappedContents);
     except :
         contentStr = '';
 
@@ -702,10 +1105,13 @@ def extractContent(url, html) :
 def extractCategory(url, html) :
     catUni = '';
     try :
-        soup = htmlToSoup(html);
-        foundCat = soup.find(attrs={"class":"fc03 m2a"});
-        catStr = foundCat.string.strip();
-        catUni = unicode(catStr);
+        if(url == gVal['special']['feelingCard']['url']):
+            catUni = "";
+        else:
+            soup = htmlToSoup(html);
+            foundCat = soup.find(attrs={"class":"fc03 m2a"});
+            catStr = foundCat.string.strip();
+            catUni = unicode(catStr);
     except :
         catUni = "";
 
@@ -716,20 +1122,23 @@ def extractCategory(url, html) :
 def extractTags(url, html) :
     tagList = [];
     try :
-        soup = htmlToSoup(html);
+        if(url == gVal['special']['feelingCard']['url']):
+            tagList = [];
+        else:
+            soup = htmlToSoup(html);
         
         # extract tags from following string:
         # blogTag:'wordpress,importer,无法识别作者,author',
 
         # blogUrl:'blog/static/1727994912012040341700',
-        nbInit = soup.find(attrs={"class":"phide nb-init"});
-        nbInitUni = unicode(nbInit);
+            nbInit = soup.find(attrs={"class":"phide nb-init"});
+            nbInitUni = unicode(nbInit);
         #nbInitStr = str(nbInit)
-        blogTagP = re.compile(r"blogTag:'(?P<blogTag>.*)',\s+blogUrl:'");
-        searched = blogTagP.search(nbInitUni);
+            blogTagP = re.compile(r"blogTag:'(?P<blogTag>.*)',\s+blogUrl:'");
+            searched = blogTagP.search(nbInitUni);
         #searched = blogTagP.search(nbInitStr)
-        tags = searched.group("blogTag");
-        tagList = tags.split(',');
+            tags = searched.group("blogTag");
+            tagList = tags.split(',');
     except :
         tagList = [];
 
@@ -742,16 +1151,24 @@ def fetchAndParseComments(url, html):
     cmtRespDictList = [];
     parsedCommentsList = [];
 
+    if(url == gVal['special']['feelingCard']['url']):
+        cmtRespDictList = fetchComments_feelingCard();
+        if(cmtRespDictList) :
+            for cmtDict in cmtRespDictList :
+                comment = {};
+                comment = fillComments_fellingCard(comment, cmtDict);
+                parsedCommentsList.append(comment);
+    else:
     #extract comments if exist
-    soup = htmlToSoup(html);
-    cmtRespDictList = fetchComments(url, soup);
-    if(cmtRespDictList) :
+        soup = htmlToSoup(html);
+        cmtRespDictList = fetchComments(url, soup);
+        if(cmtRespDictList) :
         # got valid comments, now proess it
-        for cmtDict in cmtRespDictList :
-            comment = {};
+            for cmtDict in cmtRespDictList :
+                comment = {};
             #fill all comment field
-            comment = fillComments(comment, cmtDict);
-            parsedCommentsList.append(comment);
+                comment = fillComments(comment, cmtDict);
+                parsedCommentsList.append(comment);
 
     return parsedCommentsList;
 
@@ -760,10 +1177,23 @@ def fetchAndParseComments(url, html):
 def findNextPermaLink(url, html) :
     nextLinkStr = '';
     try :
-        soup = htmlToSoup(html);
-        foundNextLink = soup.find(attrs={"class":"pright thide"});
-        nextLinkStr = foundNextLink.a['href'];
-        logging.debug("Found next permanent link %s", nextLinkStr);
+        if(url == gVal['special']['feelingCard']['url']):
+            nextLinkStr = "";
+            gVal['special']['feelingCard']['processed'] = True;
+        else:
+            soup = htmlToSoup(html);
+            foundNextLink = soup.find(attrs={"class":"pright thide"});
+            logging.debug("foundNextLink=%s", foundNextLink);
+            if(foundNextLink):
+                nextLinkStr = foundNextLink.a['href'];
+            if((not nextLinkStr) and (not gVal['special']['feelingCard']['processed'])):
+                logging.debug("Next perma link is empty, so in last, take special process.");
+                nextLinkStr = gVal['special']['feelingCard']['url'];
+                gVal['special']['feelingCard']['processed'] = True;
+        if(nextLinkStr):
+            logging.debug("Found next permanent link %s", nextLinkStr);
+        else:
+            logging.debug("Not found next permanent link");
     except :
         nextLinkStr = '';
         logging.debug("Can not find next permanent link.");
@@ -870,6 +1300,7 @@ def extractBlogTitAndDesc(blogEntryUrl) :
 def extractBlogUser(inputUrl):
     #print "inputUrl=",inputUrl;
     
+    crifanLib.initAutoHandleCookies("localTempCookieFile.txt");
     (extractOk, extractedBlogUser, generatedBlogEntryUrl) = (False, "", "");
 
     try :
@@ -904,6 +1335,13 @@ def extractBlogUser(inputUrl):
         gVal['blogUser'] = extractedBlogUser;
         gVal['blogEntryUrl'] = generatedBlogEntryUrl;
         
+        gVal['special']['feelingCard']['url'] = gVal['blogEntryUrl'] + "/blog/#m=1";
+        logging.info("Generated netease 163 feeling card sepeical url=%s", gVal['special']['feelingCard']['url']);
+        respHtml = crifanLib.getUrlRespHtml(gVal['blogEntryUrl']);
+        udHost = re.search(r"UD\.host\s*=\s*\{\s*userId:(?P<userId>[0-9]{1,20})\s*,", respHtml);
+        userId = udHost.group("userId");
+        logging.info("Extracted blog useId=%s", userId);
+        gVal['userId'] = userId;
     return (extractOk, extractedBlogUser, generatedBlogEntryUrl);
 
 #------------------------------------------------------------------------------
@@ -932,9 +1370,10 @@ def find1stPermalink():
         # ,userName:'zhuchao-2006'
         # ,...........
         # };
-        udHost = re.search(r"UD\.host\s*=\s*\{\s*userId:(?P<userId>[0-9]{1,20})\s*,", respHtml);
-        userId = udHost.group("userId");
-        logging.debug("Extracted blog useId=%s", userId);
+        # udHost = re.search(r"UD\.host\s*=\s*\{\s*userId:(?P<userId>[0-9]{1,20})\s*,", respHtml);
+        # userId = udHost.group("userId");
+        # logging.debug("Extracted blog useId=%s", userId);
+        userId = gVal['userId'];
 
         # 3. get blogs and parse it
         needGetMoreBlogs = True;
@@ -944,13 +1383,18 @@ def find1stPermalink():
 
         while needGetMoreBlogs :
             logging.debug("Start to get blogs: startBlogIdx=%d, onceGetNum=%d", startBlogIdx, onceGetNum);
-            getBlogUrl = genGetBlogsUrl(userId, startBlogIdx, onceGetNum);
+            c0ScriptName = "BlogBeanNew";
+            c0MethodName = "getBlogs";
+            c0Param0 = "number:" + str(userId);
+            c0Param1 = "number:" + str(startBlogIdx);
+            c0Param2 = "number:" + str(onceGetNum);
+            blogsDwrRespHtml = getPlaincallRespDwrStr(c0ScriptName, c0MethodName, c0Param0, c0Param1, c0Param2)
             
-            # get blogs
-            blogsResp = crifanLib.getUrlRespHtml(getBlogUrl);
+            logging.debug("blogsDwrRespHtml=%s", blogsDwrRespHtml);
                         
             # parse it
-            lines = blogsResp.split("\r\n");
+            lines = blogsDwrRespHtml.split("\r\n");
+            logging.debug("lines=%s", lines);
             noBlankLines = crifanLib.removeEmptyInList(lines);
 
             # remove the 0,1,-1 line
@@ -1177,16 +1621,19 @@ def isPrivatePost(url, html) :
     # public posts:
     #<h3 class="title pre fs1"><span class="tcnt">公开 帖子 测试</span>&nbsp;&nbsp;<span class="bgc0 fc07 fw0 fs0"></span></h3>
     try :
-        soup = htmlToSoup(html);
-        foundBgc0 = soup.find(attrs={"class":"bgc0 fc07 fw0 fs0"});
-        if foundBgc0 and foundBgc0.contents :
-            for i, content in enumerate(foundBgc0.contents) :
-                curStr = content;
+        if(url == gVal['special']['feelingCard']['url']):
+            isPrivate = False;
+        else:
+            soup = htmlToSoup(html);
+            foundBgc0 = soup.find(attrs={"class":"bgc0 fc07 fw0 fs0"});
+            if foundBgc0 and foundBgc0.contents :
+                for i, content in enumerate(foundBgc0.contents) :
+                    curStr = content;
                 # here: type(curStr)= <class 'BeautifulSoup.NavigableString'>
-                curStr = unicode(curStr);
-                if(curStr == u"私人日志"):
-                    isPrivate = True;
-                    break;
+                    curStr = unicode(curStr);
+                    if(curStr == u"私人日志"):
+                        isPrivate = True;
+                        break;
     except :
         isPrivate = False;
         logging.debug("Error while check whether post is private");

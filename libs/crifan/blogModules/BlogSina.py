@@ -7,7 +7,12 @@ For BlogsToWordpress, this file contains the functions for Sina Blog.
 [TODO]
 
 【版本历史】
-v1.4:
+[v1.5]
+1.fix parse sina post comment response json string
+http://blog.sina.com.cn/s/blog_4701280b0101854o.html
+comment url:
+http://blog.sina.com.cn/s/comment_4701280b0101854o_1.html
+[v1.4]
 1.支持处理评论数目超多的帖子，比如：
 http://blog.sina.com.cn/s/blog_4701280b0101854o.html -> 2万多个评论
 http://blog.sina.com.cn/s/blog_4701280b0102e0p3.html -> 3万多个评论
@@ -31,7 +36,7 @@ import cookielib;
 #from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.5";
+__VERSION__ = "v1.6";
 
 gConst = {
     'spaceDomain'  : 'http://blog.sina.com.cn',
@@ -558,7 +563,8 @@ def getCmtJson(cmtUrl):
     if(respJson) :
         #logging.debug("Comment url ret json: \n%s", respJson);
         # extract returned data field
-        foundData = re.search('{"code":"A00006",data:"(?P<dataStr>.+)"}$', respJson);
+        #foundData = re.search('{"code":"A00006",data:"(?P<dataStr>.+)"}$', respJson);
+        foundData = re.search('{"code":"A00006","?data"?:"(?P<dataStr>.+)"}$', respJson);
         if (foundData) :
             dataStr = foundData.group("dataStr");
             # 1. no comments:

@@ -6,6 +6,9 @@ For BlogsToWordpress, this file contains the functions for Diandian qing Blog.
 
 [TODO]
 
+[History]
+[v2.0]
+1. fix bug now support http://googleyixia.com/ to find first perma link, next perma link, extract title, tags
 """
 
 import os;
@@ -25,7 +28,7 @@ import json; # New in version 2.6.
 #import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v1.0";
+__VERSION__ = "v2.0";
 
 gConst = {
     'spaceDomain'   : 'http://www.diandian.com',
@@ -187,8 +190,8 @@ def find1stPermalink():
         #http://matchachiharu.diandian.com/archive
         archiveUrl = gVal['blogEntryUrl'] + "/archive";
         logging.debug("archiveUrl=%s", archiveUrl);
-        respHtml = crifanLib.getUrlRespHtml(archiveUrl);
-        logging.debug("respHtml=%s", respHtml);
+        archiveUrlRespHtml = crifanLib.getUrlRespHtml(archiveUrl);
+        logging.debug("archiveUrlRespHtml=%s", archiveUrlRespHtml);
         
         # <div class="mega-timeline-selector" id="J_MegaTimeLineSelector"><ul class="mega-timeline-list selected">
         # <li>
@@ -210,7 +213,7 @@ def find1stPermalink():
         # <a data-yearmonth="2011年 九月" data-month="201109" data-postcount="14" id="J_Month_201109"
         # class="month ">九月</a>
         # </li></ul></div>
-        soup = htmlToSoup(respHtml);
+        soup = htmlToSoup(archiveUrlRespHtml);
         foundAllMonthLi = soup.findAll(attrs={"class":"month-li"});
         logging.debug("foundAllMonthLi=%s", foundAllMonthLi);
         if(foundAllMonthLi):
@@ -225,6 +228,7 @@ def find1stPermalink():
                 'lite'  : "1",
                 'month' : liADatamonth,
             };
+            logging.debug("archiveUrl=%s", archiveUrl);
             lastMonthRespHtml = crifanLib.getUrlRespHtml(archiveUrl, postDict=postDict);
             logging.debug("lastMonthRespHtml=%s", lastMonthRespHtml);
             
@@ -483,13 +487,13 @@ def extractTitle(url, html):
         if(not found):
             #http://blog.nuandao.com/post/2011-05-03/670526
             #<h1 class="title" id="returntitle"><span><a href="http://blog.nuandao.net/">回到博客</a></span><a href="http://blog.nuandao.com/post/2011-05-03/670526">欢迎你来暖岛！</a></h1>
-            foundH1ClassTitle = soup.find(name="h1", attrs={"class":"title", "id":"returntitle"});
-            logging.debug("foundH1ClassTitle=%s", foundH1ClassTitle);
-            if(foundH1ClassTitle):
-                contents = foundH1ClassTitle.contents;
+            foundH1ClassTitleId = soup.find(name="h1", attrs={"class":"title", "id":"returntitle"});
+            logging.debug("foundH1ClassTitleId=%s", foundH1ClassTitleId);
+            if(foundH1ClassTitleId):
+                contents = foundH1ClassTitleId.contents;
                 logging.debug("contents=%s", contents);
-                if(foundH1ClassTitle):
-                    h1ClassTitleLastA = foundH1ClassTitle.contents[1];
+                if(foundH1ClassTitleId):
+                    h1ClassTitleLastA = foundH1ClassTitleId.contents[1];
                     logging.debug("h1ClassTitleLastA=%s", h1ClassTitleLastA);
                     if(h1ClassTitleLastA):
                         returntitleAStr = h1ClassTitleLastA.string;
@@ -498,6 +502,18 @@ def extractTitle(url, html):
                             titleUni = returntitleAStr;
                             found = True;
             
+        if(not found):
+            foundDivClassContent = soup.find(name="div", attrs={"class":"content"});
+            logging.debug("foundDivClassContent=%s", foundDivClassContent);
+            if(foundDivClassContent):
+                foundDivClassEntry = foundDivClassContent.find(name="div", attrs={"class":"entry"});
+                logging.debug("foundDivClassEntry=%s", foundDivClassEntry);
+                if(foundDivClassEntry):
+                    foundH1ClassTitle = foundDivClassEntry.find(name="h1", attrs={"class":"title"});
+                    logging.debug("foundH1ClassTitle=%s", foundH1ClassTitle);
+                    if(foundH1ClassTitle):
+                        titleUni = unicode(foundH1ClassTitle.string);
+                        found = True;
         if(not found):
             # here just use html title as post title, such as:
             #http://www.zoushijie.com/post/2012-09-22/40038845472
@@ -630,6 +646,15 @@ def findNextPermaLink(url, html) :
                 if(prevPostHref):
                     nextLinkStr = prevPostHref;
                     foundNext = True;
+        if(not foundNext):
+            foundLinkPrev = soup.find(name="a", attrs={"class":"pagination-link prev"});
+            logging.debug("foundLinkPrev=%s", foundLinkPrev);
+            if(foundLinkPrev):
+                linkPrevHref = foundLinkPrev['href'];
+                logging.debug("linkPrevHref=%s", linkPrevHref);
+                if(linkPrevHref):
+                    nextLinkStr = linkPrevHref;
+                    foundNext = True;
 
         logging.debug("Found next permanent link=%s, title=%s", nextLinkStr, nextPostTitle);
     except :
@@ -741,7 +766,7 @@ def extractContent(url, html) :
         foundDivClassPostInner = soup.find(name="div", attrs={"class":"postInner"});
         foundContentDivClassInner = soup.find(name="div", attrs={"class":"inner "});
         #foundDivClassRichContent = soup.find(name="div", attrs={"class":"content-entry entry-photo rich-content"});
-        foundDivClassRichContent = soup.find(name="div", attrs={"class":re.compile("content-entry entry-\w+ rich-content")});
+        foundDivClassRichContent = soup.find(name="div", attrs={"class":re.compile("(content-entry entry-\w+ )?rich-content")});
         foundDivClassPostSomething = soup.find(name="div", attrs={"class":re.compile("post [(text)|(photo)|(audio)|(video)|(link)]")});
         
         if(foundDivClassPostSomething):
@@ -813,7 +838,7 @@ def extractContent(url, html) :
             
             logging.debug("contentUni=%s", contentUni);
         else:
-            logging.error("Can not found content soup");
+            logging.error("Can not found content soup for url=%s, html=\r\n%s", url, html);
     except :
         logging.debug("Fail to extract post content from url=%s, html=\n%s", url, html);
         contentUni = '';
@@ -871,6 +896,19 @@ def extractTags(url, html) :
             logging.debug("foundDivClassMetainfo=%s", foundDivClassMetainfo);
             if(foundDivClassMetainfo):
                 foundAllTagA = foundDivClassMetainfo.findAll(name="a", attrs={"href":re.compile("/\?tag=.+?")});
+                logging.debug("foundAllTagA=%s", foundAllTagA);
+                if(foundAllTagA):
+                    for eachTagA in foundAllTagA:
+                        logging.debug("eachTagA=%s", eachTagA);
+                        tagAUni = eachTagA.string;
+                        logging.debug("tagAUni=%s", tagAUni);
+                        tagList.append(tagAUni);
+                    foundTag = True;
+        if(not foundTag):
+            foundDlClassTags = soup.find(name="dl", attrs={"class":"tags"});
+            logging.debug("foundDlClassTags=%s", foundDlClassTags);
+            if(foundDlClassTags):
+                foundAllTagA = foundDlClassTags.findAll(name="a", attrs={"href":re.compile("/\?tag=.+?")});
                 logging.debug("foundAllTagA=%s", foundAllTagA);
                 if(foundAllTagA):
                     for eachTagA in foundAllTagA:

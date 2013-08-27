@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v17.1
+版本：     v17.7
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -30,6 +30,25 @@ http://www.crifan.com/bbs/categories/blogstowordpress
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v17.7]
+1. add note when not designate -s or -f
+[BlogNetease.py]
+2. add emotion into post
+eg:
+http://blog.163.com/ni_chen/blog/#m=1
+-> 心情随笔
+3. support direct input feeling card url:
+BlogsToWordpress.py -f http://green-waste.blog.163.com/blog/#m=1
+BlogsToWordpress.py -f http://blog.163.com/ni_chen/blog/#m=1
+[BlogSina.py]
+4. fix parse sina post comment response json string
+http://blog.sina.com.cn/s/blog_4701280b0101854o.html
+comment url:
+http://blog.sina.com.cn/s/comment_4701280b0101854o_1.html
+[BlogDiandian.py]
+5. fix bug now support http://googleyixia.com/ to find first perma link, next perma link, extract title, tags
+[v17.2]
+1. [BlogNetease] update to fix bug: can not find first permanent link
 [v17.1]
 1.fix error for extract post title  and nex link for:
 http://78391997.qzone.qq.com/
@@ -149,7 +168,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v17.1";
+__VERSION__ = "v17.7";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
@@ -874,8 +893,9 @@ def fetchSinglePost(url):
     # sometime due to network error, fetch page will fail, so here do several try
     for tries in range(gCfg['funcTotalExecNum']) :
         try :
+            logging.debug("Begin to get url resp html for %s", url);
             respHtml = crifanLib.getUrlRespHtml(url);
-            #logging.debug("Response html\n---------------\n%s", respHtml);
+            logging.debug("Response html\n---------------\n%s", respHtml);
             gVal['statInfoDict']['fetchPageTime'] += crifanLib.calcTimeEnd("fetch_page");
             logging.debug("Successfully downloaded: %s", url);
             break # successfully, so break now
@@ -920,6 +940,7 @@ def fetchSinglePost(url):
     # extrat next (previously published) blog item link
     # here must extract next link first, for next call to use while omit=True
     infoDict['nextLink'] = findNextPermaLink(url, respHtml);
+    logging.debug("infoDict['nextLink']=%s", infoDict['nextLink']);
     logging.debug("Extracted post's next permanent link: %s", infoDict['nextLink']);
 
     isPrivate = isPrivatePost(url, respHtml);
@@ -1637,6 +1658,7 @@ def main():
     gVal['statInfoDict']['fetchPageTime']   = 0.0;
     gVal['statInfoDict']['find1stLinkTime'] = 0.0;
 
+    crifanLib.initAutoHandleCookies();
     crifanLib.calcTimeStart("total");
 
     # 3. connect src blog and find first permal link
@@ -1662,6 +1684,9 @@ def main():
         gVal['statInfoDict']['find1stLinkTime'] = crifanLib.calcTimeEnd("find_first_perma_link");
     else:
         logging.error("Must designate the entry URL for the first blog item !");
+        logging.error(u"解决办法：指定对应的-f或-s参数。详见：");
+        logging.error(u"BlogsToWordPress 的用法的举例说明");
+        logging.error("http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/usage_example/");
         sys.exit(2);
     
     # 4. main loop, fetch and process for every post
