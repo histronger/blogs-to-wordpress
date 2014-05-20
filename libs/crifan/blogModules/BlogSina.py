@@ -7,11 +7,15 @@ For BlogsToWordpress, this file contains the functions for Sina Blog.
 [TODO]
 
 【版本历史】
+[v1.6]
+1.fixbug -> support blog author reply comments
+
 [v1.5]
 1.fix parse sina post comment response json string
 http://blog.sina.com.cn/s/blog_4701280b0101854o.html
 comment url:
 http://blog.sina.com.cn/s/comment_4701280b0101854o_1.html
+
 [v1.4]
 1.支持处理评论数目超多的帖子，比如：
 http://blog.sina.com.cn/s/blog_4701280b0101854o.html -> 2万多个评论
@@ -114,6 +118,7 @@ def htmlToSoup(html):
 # (2) or given any blog url, such as:
 # http://blog.sina.com.cn/s/blog_3d55a9b70100nyl8.html
 # http://blog.sina.com.cn/s/blog_5ed55f980102e617.html?tj=1
+# http://blog.sina.com.cn/s/blog_67aa18870101dd7i.html
 # extract http://blog.sina.com.cn/crifan2008
 # from its html code
 # (3) extract 2671017827 from:
@@ -152,15 +157,29 @@ def extractBlogUser(inputUrl):
                 postUrl = foundPostLink.group("postUrl");
                 respHtml = crifanLib.getUrlRespHtml(postUrl);
                 soup = htmlToSoup(respHtml);
-                blogname = soup.find(id='blogname');
-                if blogname and blogname.a :
-                    href = blogname.a['href']; #http://blog.sina.com.cn/crifan2008
+                blognameSoup = soup.find(name="h1", id="blogname");
+                logging.debug("blognameSoup=%s", blognameSoup);
+                if blognameSoup and blognameSoup.a :
+                    #http://blog.sina.com.cn/crifan2008
+                    #<h1 id="blogname" class="blogtitle"><a href="http://blog.sina.com.cn/crifan2008"><span id="blognamespan">crifan.com</span></a><a onclick="return false;" href="javscript:;" class="CP_a_fuc">[<cite id="modifytitle">编辑</cite>]</a></h1>
+                    
+                    #http://blog.sina.com.cn/u/1739200647
+                    #<h1 id="blogname" class="blogtitle"><a href="http://blog.sina.com.cn/u/1739200647"><span id="blognamespan">小马遇上伪翻译</span></a></h1>
+                    href = blognameSoup.a['href'];
+                    #logging.info("href=%s", href);
                     extractedMainUrl = href; 
-                    splitedList = extractedMainUrl.split("/");
-                    extractedBlogUser = splitedList[3];
                     generatedBlogEntryUrl = extractedMainUrl;
-                    extractOk = True;
+                    logging.debug("generatedBlogEntryUrl=%s", generatedBlogEntryUrl);
 
+                    # splitedList = extractedMainUrl.split("/");
+                    # extractedBlogUser = splitedList[3];
+                    blognamespanSoup = blognameSoup.find(name="span", id="blognamespan");
+                    if(blognamespanSoup and blognamespanSoup.string):
+                        extractedBlogUser = blognamespanSoup.string;
+                        logging.debug("extractedBlogUser=%s", extractedBlogUser);
+                        extractOk = True;
+                    else:
+                        logging.debug("Not found: blognamespan for sina blog");
     except :
         (extractOk, extractedBlogUser, generatedBlogEntryUrl) = (False, "", "");
         
@@ -408,6 +427,152 @@ def parseHtml(backslashDataStr) :
 
     return parsedHtml;
 
+#process single (main or sub) comment soup
+def parseSingleCmtSoup(singleCmtSoup, curCmtId, parentCmdId):
+    logging.debug("in parseSingleCmtSoup: curCmtId=%d, parentCmdId=%d", curCmtId, parentCmdId);
+    #logging.debug("singleCmtSoup=%s", singleCmtSoup);
+
+    destCmtDict = {};
+    
+    #main comment
+    # <div class="SG_revert_Cont">
+        # <p><span class="SG_revert_Tit" id="nick_cmt_2547560"><a href="http://blog.sina.com.cn/u/3149389173" target="_blank">MadCatMKII</a></span><span class="SG_revert_Time" userid="3149389173"><em class="SG_txtc">2013-07-15 01:04:24</em>&nbsp<a id="67aa18870101dd7i_2547560" onclick="comment_report('67aa18870101dd7i_2547560')" href="javascript:;">[\u4e3e\u62a5]</a></span></p>
+        # <div class="SG_revert_Inner SG_txtb" id="body_cmt_2547560">\u5355\u8bba\u4e00\u4e2a\u683c\u6597\u6e38\u620f\u7684\u8bdd\uff0c\u5982\u679c\u662f\u8d70Furry\u8def\u7ebf\u8bf4\u4e0d\u5b9a\u6bd4\u8d70PONY\u8def\u7ebf\u66f4\u6709\u8d5a\u5934\uff0c\u6bd5\u7adf\u8bba\u7ec4\u6210\u7684\u8bdd\uff0cFurry\u63a7\u4eec\u4e0d\u6bd4\u9a6c\u8ff7\u5c11\u591a\u5c11\uff0c\u800c\u4e14\u4ed6\u4eec\u80af\u5b9a\u66f4\u559c\u6b22\u683c\u6597\u6e38\u620f\u2026\u2026<br>\u4f46\u662f\u8fd9\u80af\u5b9a\u4e0d\u662f\u9a6c\u8ff7\u60f3\u8981\u770b\u5230\u7684\u3002<br>\u800c\u4e14\u5b69\u4e4b\u5b9d\u4e5f\u5931\u53bb\u4e86\u4e00\u4e2a\u8ba9\u66f4\u591a\u4eba\u559c\u6b22\u5c0f\u9a6c\u7684\u673a\u4f1a\u3002<br><br><br>\u6709\u4e0d\u5c11\u4eba\u90fd\u662f\u56e0\u4e3a\u73a9EFZ\u4e4b\u540e\u624d\u60f3\u8d77\u53bb\u73a9\u90a3\u51e0\u4e2aGALGAME\u7684\u3002<br>\u5982\u679c\u8fd9\u4e2a\u6e38\u620f\u505a\u7684\u8db3\u591f\u4f18\u79c0\u7684\u8bdd\uff0c\u80af\u5b9a\u4e5f\u80fd\u5438\u5f15\u4e00\u5927\u6279\u683c\u6597\u6e38\u620f\u7231\u597d\u8005\u5165\u5751\u3002<br>\u53ef\u60dc\u77ed\u89c6\u7684\u5b69\u4e4b\u5b9d\u5374\u505a\u4e86\u4e0d\u7406\u667a\u7684\u4e3e\u52a8\u3002<br><br></div>
+
+    
+    #sub comment
+            # <div class="SG_revert_Re SG_j_linedot1" id="reply_2547560" style="display:">
+    # <p><span class="SG_revert_Tit">\u535a\u4e3b\u56de\u590d\uff1a</span><span class="SG_revert_Time"><em class="SG_txtc">2013-07-15 01:28:10</em></span></p>
+    # <p class="myReInfo wordwrap">Hasbro\u8fd8\u662f\u6709\u5c01\u7684\u7406\u7531\u7684\uff0c\u5426\u5219\u53ef\u80fd\u88ab\u5176\u4ed6\u516c\u53f8\u501f\u673a\u4f5c\u4e3a\u201c\u9ed8\u8bb8\u65d7\u4e0b\u7248\u6743\u89d2\u8272\u88ab\u7b2c\u4e09\u65b9\u5546\u7528\u201d\u7684\u7406\u7531\u62ff\u6765\u4f5c\u4e3a\u76d7\u7248\u7684\u501f\u53e3\uff0c\u9020\u6210\u516c\u53f8\u7684\u635f\u5931\u3002\u8fd9\u4e8b\u548c\u7f8e\u5e1d\u7684\u7248\u6743\u6cd5\u662f\u6709\u5173\u7684\u3002<br><br><br>\u95ee\u9898\u662f\u2026\u2026\u7ed9\u4e2a\u7279\u522b\u6388\u6743\u8fd9\u4e8b\u4e0d\u5c31\u7ed3\u4e86\u4e48\u3002\u7686\u5927\u6b22\u559c\u3002<br><br><br>\u5f53\u7136\uff0c\u4e8e\u6211\u65e0\u6240\u8c13\uff0c\u6211\u66f4\u613f\u610f\u652f\u6301\u6709\u68a6\u60f3\u7684LF\u5927\u795e\u3002</p>
+    
+    
+    # init to null, log it while error
+    SG_revert = None;
+    SG_revert_Tit = None;
+    cmtTitleUrl = "";
+    cmtTitle = "";
+    decoedCmtTitle = "";
+    SG_revert_Time = None;
+    datetimeStr = "";
+    parsedLocalTime = None;
+    gmtTime = None;
+    mainOrSubCmtBodySoup = None;
+    #mappedContents = None;
+    cmtContent = "";
+    decodedCmtContent = "";
+    
+    try:
+        destCmtDict['id'] = curCmtId;
+        
+        logging.debug("--- comment[%d] ---", destCmtDict['id']);
+        
+        SG_revert = singleCmtSoup.p;
+        logging.debug("SG_revert=%s", SG_revert);
+        
+        SG_revert_Tit = SG_revert.find(attrs={"class":"SG_revert_Tit"});
+        #cmtTitleUrl = "";
+        if SG_revert_Tit.a :
+            SG_revert_Tit_a = SG_revert_Tit.a;
+            
+            logging.debug("SG_revert_Tit_a=%s", SG_revert_Tit_a);
+            
+            cmtTitle = SG_revert_Tit_a.string;
+            #print "a.string OK, cmtTitle=",cmtTitle;
+            
+            cmtTitleUrl = SG_revert_Tit_a['href'];
+            logging.debug("cmtTitleUrl=%s", cmtTitleUrl);
+        else :
+            cmtTitle = SG_revert_Tit.string;
+        
+        logging.debug("cmtTitle=%s", cmtTitle);
+
+        # for special:
+        # the 980th in comment http://blog.sina.com.cn/s/blog_4701280b0101854o.html not contain title 
+        # => SG_revert_Tit_a.string is empty
+        # => follow cmtTitle.decode('unicode-escape') will fail
+        # => set a fake title if is empty
+        if(not cmtTitle) :
+            cmtTitle = "Nobody";
+
+        decoedCmtTitle = cmtTitle.decode('unicode-escape');
+        #process special author title to original author
+        if(decoedCmtTitle == u"博主回复："):
+            decoedCmtTitle = gVal['blogUser'];
+            cmtTitleUrl = gVal['blogEntryUrl'];
+
+        destCmtDict['author'] = decoedCmtTitle;
+        destCmtDict['author_url'] = cmtTitleUrl;
+        
+        SG_revert_Time = SG_revert.find(attrs={"class":"SG_revert_Time"});
+        logging.debug("SG_revert_Time=%s", SG_revert_Time);
+        
+        datetimeStr = SG_revert_Time.em.string;
+        
+        parsedLocalTime = datetime.strptime(datetimeStr, '%Y-%m-%d %H:%M:%S'); #2012-03-29 09:52:17
+        gmtTime = crifanLib.convertLocalToGmt(parsedLocalTime);
+        destCmtDict['date'] = parsedLocalTime.strftime("%Y-%m-%d %H:%M:%S");
+        destCmtDict['date_gmt'] = gmtTime.strftime("%Y-%m-%d %H:%M:%S");
+        
+        bodyCmtSoup = singleCmtSoup.find(name="div", attrs={"class":"SG_revert_Inner SG_txtb", "id":re.compile("body_cmt_\d+")}); #<div class="SG_revert_Inner SG_txtb" id="body_cmt_2547560">
+        logging.debug("bodyCmtSoup=%s", bodyCmtSoup);
+        
+        myReInfoSoup = singleCmtSoup.find(name="p", attrs={"class":re.compile("myReInfo.*?")}); #<p class="myReInfo wordwrap">
+        logging.debug("myReInfoSoup=%s", myReInfoSoup);
+        if(bodyCmtSoup):
+            #first use main comment soup
+            mainOrSubCmtBodySoup = bodyCmtSoup;
+        elif(myReInfoSoup):
+            #if not exist first comment body, then is sub comment
+            mainOrSubCmtBodySoup = myReInfoSoup;
+
+        #logging.debug("mainOrSubCmtBodySoup=%s", mainOrSubCmtBodySoup);
+        
+        # mappedContents = map(CData, mainOrSubCmtBodySoup.contents);
+        # logging.info("mappedContents=%s", mappedContents);
+        # cmtContent = ''.join(mappedContents);
+        
+        cmtContent = crifanLib.soupContentsToUnicode(mainOrSubCmtBodySoup.contents);
+        #logging.info("cmtContent=%s", cmtContent);
+        
+        decodedCmtContent = cmtContent.decode('unicode-escape');
+        #logging.info("decodedCmtContent=%s", decodedCmtContent);
+        destCmtDict['content'] = decodedCmtContent;
+
+        destCmtDict['author_email'] = "";
+        destCmtDict['author_IP'] = "";
+        #destCmtDict['approved'] = 1;
+        #destCmtDict['type'] = '';
+        #destCmtDict['parent'] = 0;
+        destCmtDict['parent'] = int(parentCmdId);
+        #destCmtDict['user_id'] = 0;
+        
+        logging.debug("author=%s", destCmtDict['author']);
+        logging.debug("author_url=%s", destCmtDict['author_url']);
+        logging.debug("date=%s", destCmtDict['date']);
+        logging.debug("date_gmt=%s", destCmtDict['date_gmt']);
+        logging.debug("content=%s", destCmtDict['content']);
+        logging.debug("parent=%d", destCmtDict['parent']);
+        
+        #print "single comment parse OK: %d"%(curCmtId);
+    except:
+        logging.debug("Error while parse single comment %d", curCmtId);
+        logging.debug("-------- detailed single comment info --------");
+        logging.debug("SG_revert=%s", SG_revert);
+        logging.debug("SG_revert_Tit=%s", SG_revert_Tit);
+        logging.debug("cmtTitleUrl=%s", cmtTitleUrl);
+        logging.debug("decoedCmtTitle=%s", decoedCmtTitle);
+        logging.debug("SG_revert_Time=%s", SG_revert_Time);
+        logging.debug("datetimeStr=%s", datetimeStr);
+        logging.debug("parsedLocalTime=%s", parsedLocalTime);
+        logging.debug("gmtTime=%s", gmtTime);
+        logging.debug("mainOrSubCmtBodySoup=%s", mainOrSubCmtBodySoup);
+        #logging.debug("mappedContents=%s", mappedContents);
+        logging.debug("cmtContent=%s", cmtContent);
+        logging.debug("decodedCmtContent=%s", decodedCmtContent);
+        logging.debug("-------- detailed single comment info --------");
+
+    return destCmtDict;
+
 #------------------------------------------------------------------------------
 # parse comment 'data' field string to comment dict info
 def parseCmtDataStr(dataStr, startNum):
@@ -418,110 +583,34 @@ def parseCmtDataStr(dataStr, startNum):
     fakeHtml = genFakeHtml(parsedHtml);
     soup = BeautifulSoup(fakeHtml);
     
-    cmtList = soup.findAll(attrs={"class":"SG_revert_Cont"});
+    mainCmtList = soup.findAll(attrs={"class":"SG_revert_Cont"});
     
-    for (cmtIdx, singleCmt) in enumerate(cmtList) :
-        destCmtDict = {};
+    lastCmtId = startNum + 1;
+    logging.debug("lastCmtId=%s", lastCmtId);
+    
+    for (mainCmtIdx, singleCmtSoup) in enumerate(mainCmtList) :
+        curMainCmtId = lastCmtId;
+        #process main comment
+        mainDestCmtDict = parseSingleCmtSoup(singleCmtSoup, lastCmtId, 0);
+        logging.debug("lastCmtId=%s", lastCmtId);
+        cmtDictList.append(mainDestCmtDict);
         
-        cmtNum = cmtIdx + 1;
-        cmtId = cmtNum + startNum;
+        #check exist sub comment or not, if exist, process them
+        #<div class="SG_revert_Re SG_j_linedot1" id="reply_2547560" style="display:">
+        subCmtSoupList = singleCmtSoup.findAll(name="div", attrs={"class":"SG_revert_Re SG_j_linedot1", "id":re.compile("reply_\d+")});
+        logging.debug("subCmtSoupList=%s", subCmtSoupList);
+        if(subCmtSoupList):
+            for singleSubCmtSoup in subCmtSoupList:
+                logging.debug("singleSubCmtSoup=%s", singleSubCmtSoup);
+                #++lastCmtId;
+                lastCmtId = lastCmtId + 1;
+                #logging.info("after lastCmtId+1 in sub comment for loop, lastCmtId=%s", lastCmtId);
+                singleSubDestCmtDict = parseSingleCmtSoup(singleSubCmtSoup, lastCmtId, curMainCmtId);
+                cmtDictList.append(singleSubDestCmtDict);
         
-        # init to null, log it while error
-        SG_revert = None;
-        SG_revert_Tit = None;
-        cmtTitleUrl = "";
-        cmtTitle = "";
-        decoedCmtTitle = "";
-        SG_revert_Time = None;
-        datetimeStr = "";
-        parsedLocalTime = None;
-        gmtTime = None;
-        SG_txtb = None;
-        mappedContents = None;
-        cmtContent = "";
-        decodedCmtContent = "";
-        
-        try:
-            destCmtDict['id'] = cmtId;
-            
-            logging.debug("--- comment[%d] ---", destCmtDict['id']);
-            
-            SG_revert = singleCmt.p;
-            
-            SG_revert_Tit = SG_revert.find(attrs={"class":"SG_revert_Tit"});
-            #cmtTitleUrl = "";
-            if SG_revert_Tit.a :
-                SG_revert_Tit_a = SG_revert_Tit.a;
-                cmtTitle = SG_revert_Tit_a.string;
-                #print "a.string OK, cmtTitle=",cmtTitle;
-                
-                cmtTitleUrl = SG_revert_Tit_a['href'];
-            else :
-                cmtTitle = SG_revert_Tit.string;
-
-            # for special:
-            # the 980th in comment http://blog.sina.com.cn/s/blog_4701280b0101854o.html not contain title 
-            # => SG_revert_Tit_a.string is empty
-            # => follow cmtTitle.decode('unicode-escape') will fail
-            # => set a fake title if is empty
-            if(not cmtTitle) :
-                cmtTitle = "Nobody";
-
-            decoedCmtTitle = cmtTitle.decode('unicode-escape');
-            destCmtDict['author'] = decoedCmtTitle;
-            
-            destCmtDict['author_url'] = cmtTitleUrl;
-            
-            SG_revert_Time = SG_revert.find(attrs={"class":"SG_revert_Time"});
-            datetimeStr = SG_revert_Time.em.string;
-            
-            parsedLocalTime = datetime.strptime(datetimeStr, '%Y-%m-%d %H:%M:%S'); #2012-03-29 09:52:17
-            gmtTime = crifanLib.convertLocalToGmt(parsedLocalTime);
-            destCmtDict['date'] = parsedLocalTime.strftime("%Y-%m-%d %H:%M:%S");
-            destCmtDict['date_gmt'] = gmtTime.strftime("%Y-%m-%d %H:%M:%S");
-            
-            SG_txtb = singleCmt.div;
-            
-            mappedContents = map(CData, SG_txtb.contents);
-            cmtContent = ''.join(mappedContents);
-            
-            decodedCmtContent = cmtContent.decode('unicode-escape');
-            destCmtDict['content'] = decodedCmtContent;
-
-            destCmtDict['author_email'] = "";
-            destCmtDict['author_IP'] = "";
-            #destCmtDict['approved'] = 1;
-            #destCmtDict['type'] = '';
-            destCmtDict['parent'] = 0;
-            #destCmtDict['user_id'] = 0;
-            
-            logging.debug("author=%s", destCmtDict['author']);
-            logging.debug("author_url=%s", destCmtDict['author_url']);
-            logging.debug("date=%s", destCmtDict['date']);
-            logging.debug("date_gmt=%s", destCmtDict['date_gmt']);
-            logging.debug("content=%s", destCmtDict['content']);
-            
-            cmtDictList.append(destCmtDict);
-            #print "single comment parse OK: %d"%(cmtId);
-        except:
-            logging.debug("Error while parse single comment %d", cmtId);
-            logging.debug("-------- detailed single comment info --------");
-            logging.debug("SG_revert=%s", SG_revert);
-            logging.debug("SG_revert_Tit=%s", SG_revert_Tit);
-            logging.debug("cmtTitleUrl=%s", cmtTitleUrl);
-            logging.debug("decoedCmtTitle=%s", decoedCmtTitle);
-            logging.debug("SG_revert_Time=%s", SG_revert_Time);
-            logging.debug("datetimeStr=%s", datetimeStr);
-            logging.debug("parsedLocalTime=%s", parsedLocalTime);
-            logging.debug("gmtTime=%s", gmtTime);
-            logging.debug("SG_txtb=%s", SG_txtb);
-            logging.debug("mappedContents=%s", mappedContents);
-            logging.debug("cmtContent=%s", cmtContent);
-            logging.debug("decodedCmtContent=%s", decodedCmtContent);
-            logging.debug("-------- detailed single comment info --------");
-
-            #print "%d singleCmt error"%(cmtId);
-            break;
+        #++lastCmtId;
+        lastCmtId = lastCmtId + 1;
+        #logging.info("after lastCmtId+1 in main comment for loop, lastCmtId=%s", lastCmtId);
 
     return cmtDictList;
 
@@ -541,6 +630,7 @@ def extractPostId(sinaPostUrl):
 # get valid data field/string in returned in json string for comment url
 def getCmtJson(cmtUrl):
     logging.debug("fetch comment from url %s", cmtUrl);
+
     (gotOk, cmtDataJsonStr) = (False, "");
     respJson = "";
 
@@ -565,8 +655,12 @@ def getCmtJson(cmtUrl):
         # extract returned data field
         #foundData = re.search('{"code":"A00006",data:"(?P<dataStr>.+)"}$', respJson);
         foundData = re.search('{"code":"A00006","?data"?:"(?P<dataStr>.+)"}$', respJson);
+        logging.debug("foundData=%s", foundData);
+
         if (foundData) :
             dataStr = foundData.group("dataStr");
+            logging.debug("dataStr=%s", dataStr);
+
             # 1. no comments:
             #{"code":"A00006",data:"\u535a\u4e3b\u5df2\u5173\u95ed\u8bc4\u8bba"}
             if(dataStr == "\\u535a\\u4e3b\\u5df2\\u5173\\u95ed\\u8bc4\\u8bba") :

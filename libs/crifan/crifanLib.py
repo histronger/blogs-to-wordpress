@@ -23,11 +23,14 @@ http://www.crifan.com/files/doc/docbook/python_summary/release/html/python_summa
 3. updated decodeHtmlEntity
 4. add filterNonAsciiStr
 5. add filterHtmlTag
+
 [v4.0]
 1. fixbug of add header in getUrlResponse
 2. add getZipcodeFromLocation
+
 [v3.8]
 1. add getUrlResponse to support postDataDelimiter.
+
 [v3.7]
 1. fixbug -> add user-agent for isFileValid
 
@@ -285,7 +288,13 @@ def decodeHtmlEntity(origHtml, decodedEncoding=""):
     #logging.debug("htmlentitydefs.codepoint2name=%s", htmlentitydefs.codepoint2name);
 
     #http://fredericiana.com/2010/10/08/decoding-html-entities-to-text-in-python/
+    #http://autoexplosion.com/RVs/buy/9882.php
+    #will error 
+    #not support key : Dryer
+    #when use:
     #decodedEntityName = re.sub('&(?P<entityName>[a-zA-Z]{2,10});', lambda matched: unichr(htmlentitydefs.name2codepoint[matched.group("entityName")]), origHtml);
+
+    #logging.debug("origHtml=%s", origHtml);
     def _nameToCodepoint(matched):
         logging.debug("matched=%s", matched);
         wholeStr = matched.group(0);
@@ -298,10 +307,18 @@ def decodeHtmlEntity(origHtml, decodedEncoding=""):
             logging.debug("decodedCodepoint=%s", decodedCodepoint);
             decodedUnicodeChar = unichr(decodedCodepoint);
         else:
+            #invalid key, just omit it
+            
+            #http://autoexplosion.com/RVs/buy/9882.php
+            #&Dryer;
+            #from
+            #Washer&Dryer;, Awning,
             decodedUnicodeChar = wholeStr;
         logging.debug("decodedUnicodeChar=%s", decodedUnicodeChar);
         return decodedUnicodeChar;
     decodedEntityName = re.sub('&(?P<entityName>[a-zA-Z]{2,10});', _nameToCodepoint, origHtml);
+    #logging.info("decodedEntityName=%s", decodedEntityName);
+
     #print "type(decodedEntityName)=",type(decodedEntityName); #type(decodedEntityName)= <type 'unicode'>
     decodedCodepointInt = re.sub('&#(?P<codePointInt>\d{2,5});', lambda matched: unichr(int(matched.group("codePointInt"))), decodedEntityName);
     #print "decodedCodepointInt=",decodedCodepointInt;
@@ -379,6 +396,7 @@ def htmlEntityCodepointToName(htmlWithCodepoint):
     for key in codepointToNameDict.keys() :
         htmlWithEntityName = re.compile(key).sub(codepointToNameDict[key], htmlWithEntityName);
     return htmlWithEntityName;
+
 def filterHtmlTag(origHtml):
     """
     filter html tag, but retain its contents
@@ -395,13 +413,24 @@ def filterHtmlTag(origHtml):
         <a href="javascript:void(0);" onClick="window.open(new Array('http','',':','//','www.carfaxonline.com','/cfm/Display_Dealer_Report.cfm?partner=AXX_0&UID=C367031&vin=JH4KB2F61AC001005').join(''), '_blank')">www.carfaxonline.com</a>
         www.carfaxonline.com        
     """
+    #logging.info("html tag, origHtml=%s", origHtml);
     filteredHtml = origHtml;
+
+    #Method 1: auto remove tag use re
+    #remove br
     filteredHtml = re.sub("<br\s*>", "", filteredHtml, flags=re.I);
     filteredHtml = re.sub("<br\s*/>", "", filteredHtml, flags=re.I);
+    #logging.info("remove br, filteredHtml=%s", filteredHtml);
+    #remove a
     filteredHtml = re.sub("<a\s+[^<>]+>(?P<aContent>[^<>]+?)</a>", "\g<aContent>", filteredHtml, flags=re.I);
+    #logging.info("remove a, filteredHtml=%s", filteredHtml);
+    #remove b,strong
     filteredHtml = re.sub("<b>(?P<bContent>[^<>]+?)</b>", "\g<bContent>", filteredHtml, re.I);
     filteredHtml = re.sub("<strong>(?P<strongContent>[^<>]+?)</strong>", "\g<strongContent>", filteredHtml, flags=re.I);
+    #logging.info("remove b,strong, filteredHtml=%s", filteredHtml);
+
     return filteredHtml;
+
 ################################################################################
 # String
 ################################################################################
@@ -710,8 +739,10 @@ def filterNonAsciiStr(originalUnicodeStr):
         in
         http://autoexplosion.com/bikes/buy/11722.php
     """
+    
     filteredAscii = originalUnicodeStr.encode("ascii", 'ignore');
     filteredUni = filteredAscii.decode("ascii", 'ignore');
+    
     return filteredUni;
 
 ################################################################################
@@ -1048,8 +1079,6 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False, po
     else :
         req = urllib2.Request(url);
 
-        #print "added header:",headerDict;
-
     defHeaderDict = {
         'User-Agent'    : gConst['UserAgent'],
         'Cache-Control' : 'no-cache',
@@ -1077,7 +1106,7 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False, po
         resp = urllib2.urlopen(req, timeout=timeout);
     else :
         resp = urllib2.urlopen(req);
-    
+        
     #update cookies into local file
     if(gVal['cookieUseFile']):
         gVal['cj'].save();
@@ -1120,17 +1149,24 @@ def getUrlRespHtml_multiTry(url, postDict={}, headerDict={}, timeout=0, useGzip=
             if fail, then retry
     """
     respHtml = "";
+    
+    # access url
+    # mutile retry, if some (mostly is network) error
     for tries in range(maxTryNum) :
         try :
             respHtml = getUrlRespHtml(url, postDict, headerDict, timeout, useGzip, postDataDelimiter);
+            #logging.debug("Successfully access url %s", url);
             break # successfully, so break now
         except :
             if tries < (maxTryNum - 1) :
+                #logging.warning("Access url %s fail, do %d retry", url, (tries + 1));
                 continue;
             else : # last try also failed, so exit
                 logging.error("Has tried %d times to access url %s, all failed!", maxTryNum, url);
                 break;
+
     return respHtml;
+    
 
 ################################################################################
 # Image
@@ -1371,39 +1407,60 @@ def getZipcodeFromLocation(locationStr):
     """
     zipCode = "";
     gotZipCode = False;
+    
     if(not gotZipCode):
+        #Method 1: 
+        #http://autoexplosion.com/templates/zip_search.php
         cityStateList = locationStr.split(",");
         logging.debug("cityStateList=%s", cityStateList);
         city = cityStateList[0].strip();
         state = cityStateList[1].strip();
         logging.debug("city=%s, state=%s", city, state);
+        #http://autoexplosion.com/templates/zip_search.php?formname=search&city=Tampa&state=FL
         zipBaseSearchUrl = "http://autoexplosion.com/templates/zip_search.php";
         paraDict = {
             'formname'  : "search",
             'city'      : city,
             'state'     : state,
         };
+        #http://autoexplosion.com/templates/zip_search.php?city=San Antonio&state=TX&formname=search
         encodedPara = urllib.urlencode(paraDict);
         logging.debug("encodedPara=%s", encodedPara);
+            
+        #zipSearchUrl = genFullUrl(zipBaseSearchUrl, paraDict);
         zipSearchUrl = zipBaseSearchUrl + "?" + encodedPara;
         logging.debug("zipSearchUrl=%s", zipSearchUrl);
+        
         headerDict = {
             'Referer'   : "http://autoexplosion.com/templates/zip_search.php?formname=search",
         };
         zipSearchRespHtml = getUrlRespHtml(zipSearchUrl, headerDict=headerDict);
         logging.debug("zipSearchRespHtml=%s", zipSearchRespHtml);
+
+        #found the first zip search result
+        # <tr>				<td colspan="2" class="cssTableCellLeft">&nbsp;San Antonio</td>
+                        # <td align="center">TX</td>
+                        # <td colspan="2" align="center" class="cssTableCellRight"><a href="javascript:paste_zip('78201');">78201</a></td>
+                    # </tr>
         soup = BeautifulSoup(zipSearchRespHtml);
         foundZipcode = soup.find(name="td", attrs={"class":"cssTableCellRight"});
         logging.debug("foundZipcode=%s", foundZipcode);
         if(foundZipcode):
             zipCode = foundZipcode.a.string; #78201
             logging.debug("zipCode=%s", zipCode);
+            
             gotZipCode = True;
         else:
             logging.debug("Failed for method 1, from %s", locationStr);
             gotZipCode = False;
+
+    #Method 2: 
+    #https://tools.usps.com/go/ZipLookupAction_input
     if(not gotZipCode):
+        #https://tools.usps.com/go/ZipLookupAction.action
         zipLookupBaseUrl = "https://tools.usps.com/go/ZipLookupAction.action";
+        #post data:
+        #mode=0&tCompany=&tZip=&tAddress=&tApt=&tCity=WEST+PALM+BEACH&sState=FL&tUrbanCode=&zip=
         paraDict ={
             'mode'      : "0",
             'tCompany'  : "",
@@ -1414,26 +1471,33 @@ def getZipcodeFromLocation(locationStr):
             'sState'    : state,
             'tUrbanCode':"",
             "zip"       : "",
+            
         };
         encodedPara = urllib.urlencode(paraDict);
         logging.debug("encodedPara=%s", encodedPara);
         zipLookupUrl = zipLookupBaseUrl + "?" + encodedPara;
         logging.debug("zipLookupUrl=%s", zipLookupUrl);
+        
         headerDict = {
             'Referer'   : "https://tools.usps.com/go/ZipLookupAction_input",
         };
         zipLookupRespHtml = getUrlRespHtml(zipLookupUrl, headerDict=headerDict);
+        #logging.debug("zipLookupRespHtml=%s", zipLookupRespHtml);
+        #<span class="zip" style="">33401</span>
         soup = BeautifulSoup(zipLookupRespHtml);
         foundZip = soup.find(name="span", attrs={"class":"zip", "style":""});
         logging.debug("foundZip=%s", foundZip);
         if(foundZip):
             zipCode = foundZip.string; #33401
             logging.debug("zipCode=%s", zipCode);
+        
             gotZipCode = True;
         else:
             logging.debug("Failed for method 2, from %s", locationStr);
             gotZipCode = False; 
+
     return zipCode;
+
 
 ################################################################################
 # BeautifulSoup

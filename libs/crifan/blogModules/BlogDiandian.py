@@ -7,8 +7,19 @@ For BlogsToWordpress, this file contains the functions for Diandian qing Blog.
 [TODO]
 
 [History]
+[v2.4]
+1. fix post content and next perma link for http://remixmusic.diandian.com
+2. fix title for post title:
+BlogsToWordpress.py -f http://remixmusic.diandian.com/?p=669 -l 1
+BlogsToWordpress.py -f http://remixmusic.diandian.com/?p=316 -l 1
+BlogsToWordpress.py -f http://remixmusic.diandian.com/?p=18117 -l 1
+BlogsToWordpress.py -f http://remixmusic.diandian.com/post/2013-05-13/40051897352 -l 1
+3. fix post content for:
+BlogsToWordpress.py -f http://remixmusic.diandian.com/post/2013-05-13/40051897352 -l 1
+
 [v2.0]
 1. fix bug now support http://googleyixia.com/ to find first perma link, next perma link, extract title, tags
+
 """
 
 import os;
@@ -28,7 +39,7 @@ import json; # New in version 2.6.
 #import random;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v2.0";
+__VERSION__ = "v2.4";
 
 gConst = {
     'spaceDomain'   : 'http://www.diandian.com',
@@ -159,6 +170,7 @@ def extractBlogUser(inputUrl):
         #http://nosta1gie.com
         #http://www.sankin77.com
         #http://www.zoushijie.com/post/2012-09-22/40038845472
+        #http://googleyixia.com/
         if(not extractOk):
             #foundDomain = re.search("http://([(www)|(blog)]\.)?(?P<domainName>\w+)\.com(/post/\d{4}-\d{2}-\d{2}/\d+)?/?", inputUrl);
             #foundDomain = re.search("(?P<blogEntryUrl>http://([(www)|(blog)]\.)?(?P<domainName>\w+)\.com)(/post/\d{4}-\d{2}-\d{2}/\d+)?/?", inputUrl);
@@ -192,7 +204,7 @@ def find1stPermalink():
         logging.debug("archiveUrl=%s", archiveUrl);
         archiveUrlRespHtml = crifanLib.getUrlRespHtml(archiveUrl);
         logging.debug("archiveUrlRespHtml=%s", archiveUrlRespHtml);
-        
+
         # <div class="mega-timeline-selector" id="J_MegaTimeLineSelector"><ul class="mega-timeline-list selected">
         # <li>
         # <a id="J_Year_2012" class="year">2012年</a>
@@ -224,11 +236,22 @@ def find1stPermalink():
             liADatamonth = liA['data-month'];
             logging.debug("liADatamonth=%s", liADatamonth);
             
+            #for debug
+            #if input url is http://googleyixia.diandian.com
+            #current archiveUrl will be http://googleyixia.diandian.com/archive/
+            #then following lastMonthRespHtml can not get the last month(200806) resp html, but only get current latest month(201306) resp html
+            #archiveUrl = "http://googleyixia.com/archive/";
+            # headerDict = {
+                # 'Referer'           : archiveUrl,
+                # 'X-Requested-With'  : "XMLHttpRequest",
+                # #Content-Type	application/x-www-form-urlencoded; charset=UTF-8
+            # };
             postDict = {
                 'lite'  : "1",
                 'month' : liADatamonth,
             };
             logging.debug("archiveUrl=%s", archiveUrl);
+            #lastMonthRespHtml = crifanLib.getUrlRespHtml(archiveUrl, postDict=postDict, headerDict=headerDict);
             lastMonthRespHtml = crifanLib.getUrlRespHtml(archiveUrl, postDict=postDict);
             logging.debug("lastMonthRespHtml=%s", lastMonthRespHtml);
             
@@ -501,8 +524,11 @@ def extractTitle(url, html):
                         if(returntitleAStr):
                             titleUni = returntitleAStr;
                             found = True;
-            
+        
         if(not found):
+            #http://googleyixia.com/node/727
+            # <div class="content"><div class="entry">
+                # <h1 class="title">“Google一下”成立</h1>
             foundDivClassContent = soup.find(name="div", attrs={"class":"content"});
             logging.debug("foundDivClassContent=%s", foundDivClassContent);
             if(foundDivClassContent):
@@ -514,6 +540,45 @@ def extractTitle(url, html):
                     if(foundH1ClassTitle):
                         titleUni = unicode(foundH1ClassTitle.string);
                         found = True;
+
+        if(not found):
+            #http://remixmusic.diandian.com/?p=669
+            # <article class="hentry writing">
+                # <header>
+                    # <a class="entry-hide open" href="#" title="Close this Card"></a>
+                    # <h1 class="entry-title">
+                           # 文字
+                    # </h1>
+            
+            #http://remixmusic.diandian.com/post/2013-05-13/40051897352
+            # <article class="hentry link">
+                # <header>
+                    # <a class="entry-hide open" href="#" title="Close this Card"></a>
+                    # <h1 class="entry-title">
+                           # <a href="http://www.junodjs.com">http://www.junodjs.com</a>
+                        # </h1>
+                # </header>
+            #foundArticleHentry = soup.find(name="article", attrs={"class":re.compile("hentry\s+(link|writing)")});
+            foundArticleHentry = soup.find(name="article", attrs={"class":re.compile("hentry\s+\w+")});
+            logging.debug("foundArticleHentry=%s", foundArticleHentry);
+            if(foundArticleHentry):
+                foundHeader = foundArticleHentry.find(name="header");
+                logging.debug("foundHeader=%s", foundHeader);
+                if(foundHeader):
+                    foundH1ClassEntryTitle = foundHeader.find(name="h1", attrs={"class":"entry-title"});
+                    logging.debug("foundH1ClassEntryTitle=%s", foundH1ClassEntryTitle);
+                    if(foundH1ClassEntryTitle):
+                        foundAHref = foundH1ClassEntryTitle.find(name="a", attrs={"href":True});
+                        logging.debug("foundAHref=%s", foundAHref);
+                        if(foundAHref):
+                            titleUni = unicode(foundAHref.string);
+                        else:
+                            titleUni = unicode(foundH1ClassEntryTitle.string);
+                        
+                        if(titleUni):
+                            titleUni = titleUni.strip();
+                        found = True;
+
         if(not found):
             # here just use html title as post title, such as:
             #http://www.zoushijie.com/post/2012-09-22/40038845472
@@ -646,7 +711,10 @@ def findNextPermaLink(url, html) :
                 if(prevPostHref):
                     nextLinkStr = prevPostHref;
                     foundNext = True;
+        
         if(not foundNext):
+            #http://googleyixia.com/node/727
+            #<a class="pagination-link prev" href="http://googleyixia.com/node/725">上一篇<span class="icon"></span></a>
             foundLinkPrev = soup.find(name="a", attrs={"class":"pagination-link prev"});
             logging.debug("foundLinkPrev=%s", foundLinkPrev);
             if(foundLinkPrev):
@@ -655,12 +723,47 @@ def findNextPermaLink(url, html) :
                 if(linkPrevHref):
                     nextLinkStr = linkPrevHref;
                     foundNext = True;
+        
+        if(not foundNext):
+            #http://remixmusic.diandian.com/?p=15022
+            # <div id="navigation">    
+                # <header>
+                    # <a class="entry-hide open" href="#" title="Close this Card"></a>
+                    # <h1 class="entry-title">分页</h1>
+                # </header>
+                # <div class="entry-content">
+                    # <a href="http://remixmusic.diandian.com/post/2011-04-14/40050272483">
+            # ← 上一篇</a>&nbsp;&nbsp;
+                # </div>
+            # </div>
+            foundDivIdNavigation = soup.find(name="div", attrs={"id":"navigation"});
+            logging.debug("foundDivIdNavigation=%s", foundDivIdNavigation);
+            if(foundDivIdNavigation):
+                foundDivClassEntryContent = foundDivIdNavigation.find(name="div", attrs={"class":"entry-content"});
+                logging.debug("foundDivClassEntryContent=%s", foundDivClassEntryContent);
+                if(foundDivClassEntryContent):
+                    foundAHref = foundDivClassEntryContent.find(name="a", attrs={"href":True});
+                    logging.debug("foundAHref=%s", foundAHref);
+                    if(foundAHref):
+                        aHrefStr = foundAHref.string;
+                        logging.debug("aHrefStr=%s", aHrefStr);
+                        logging.debug("type(aHrefStr)=%s", type(aHrefStr));
+                        aHrefStrUni = unicode(aHrefStr);
+                        logging.debug("aHrefStrUni=%s", aHrefStrUni);
+                        foundPrevPost = re.search(u"上一篇", aHrefStrUni);
+                        logging.debug("foundPrevPost=%s", foundPrevPost);
+                        if(foundPrevPost):
+                            linkAHref = foundAHref['href'];
+                            logging.debug("linkAHref=%s", linkAHref);
+                            if(linkAHref):
+                                nextLinkStr = linkAHref;
+                                foundNext = True;
 
         logging.debug("Found next permanent link=%s, title=%s", nextLinkStr, nextPostTitle);
     except :
         logging.debug("Fail to extract next perma link from url=%s, html=\n%s", url, html);
         nextLinkStr = '';
-        
+
     return nextLinkStr;
 
 #------------------------------------------------------------------------------
@@ -759,36 +862,51 @@ def extractContent(url, html) :
             # <div class="info">1年前 / <a href="http://matchachiharu.diandian.com/post/2011-09-12/4979599#notes">0℃ </a> / </div>
         # </div>
 
+        #http://googleyixia.com/node/727
+                # <div class="rich-content">
+                    # 两个月前注册了这个另Google欢喜百度忧的域名，这个站点定位我曾一度徘徊在把它建成一个Google产品边缘化的站点还是一个内容
+        # <strong><a href="http://googleyixia.com/node/category/interesting-fresh">有趣新鲜</a></strong>的站点。想了又想之后，发现自己对Google产品了解并不是那么的深刻，最终还很有可能落下一个误导视听、贻笑大方的名头，那么既然如此……
+        # <br /> 松一口气，该准备的都准备好了，那么今天
+        # <strong>Google一下</strong>也就开张啦。
+        # <br /> 我们的目标是做最好的中文
+        # <strong>奇趣</strong>社区，我们网站的Googler每天为您带来全球最新、最富有
+        # <strong><a href="http://googleyixia.com/node/tag/%E5%88%9B%E6%84%8F">创意</a></strong>、最有趣新鲜的消息，让你在全天任何一个时刻都有一个充满活力的大脑。我们希望每一个Googler在
+        # <a href="http://googleyixia.com" title="Google一下">Google一下</a>的Google过程中都能有意外收获，这就是我们一直的目标。
+                # </div>
+        
         #foundContent = soup.find(attrs={"class":re.compile("post [(text)|(photo)|(audio)|(video)|(link)]")});
         
         #foundContentPhoto = soup.find(attrs={"class":"post photo"});
         #foundContentPhotoIsotope = soup.find(attrs={"class":"post photo isotope-item"});
-        foundDivClassPostInner = soup.find(name="div", attrs={"class":"postInner"});
-        foundContentDivClassInner = soup.find(name="div", attrs={"class":"inner "});
-        #foundDivClassRichContent = soup.find(name="div", attrs={"class":"content-entry entry-photo rich-content"});
-        foundDivClassRichContent = soup.find(name="div", attrs={"class":re.compile("(content-entry entry-\w+ )?rich-content")});
-        foundDivClassPostSomething = soup.find(name="div", attrs={"class":re.compile("post [(text)|(photo)|(audio)|(video)|(link)]")});
-        
-        if(foundDivClassPostSomething):
-            logging.debug("foundDivClassPostSomething=%s", foundDivClassPostSomething);
-            foundContent = foundDivClassPostSomething;
-        # if(foundContentPhoto):
-            # logging.debug("foundContentPhoto=%s", foundContentPhoto);
-            # foundContent = foundContentPhoto;
-        # elif(foundContentPhotoIsotope):
-            # foundContentPostInner = foundContentPhotoIsotope.find(attrs={"class":"postInner"});
-            # logging.debug("foundContentPostInner=%s", foundContentPostInner);
-            # foundContent = foundContentPostInner;
-        elif(foundDivClassPostInner):
-            logging.debug("foundDivClassPostInner=%s", foundDivClassPostInner);
-            foundContent = foundDivClassPostInner;
-        elif(foundContentDivClassInner):
-            logging.debug("foundContentDivClassInner=%s", foundContentDivClassInner);
-            foundContent = foundContentDivClassInner;
-        elif(foundDivClassRichContent):
-            logging.debug("foundDivClassRichContent=%s", foundDivClassRichContent);
-            foundContent = foundDivClassRichContent;
 
+        if(not foundContent):
+            foundContent = soup.find(name="div", attrs={"class":re.compile("post [(text)|(photo)|(audio)|(video)|(link)]")});
+
+        if(not foundContent):
+            foundContent = soup.find(name="div", attrs={"class":"postInner"});
+
+        if(not foundContent):
+            foundContent = soup.find(name="div", attrs={"class":"inner "});
+
+        if(not foundContent):
+            #foundDivClassRichContent = soup.find(name="div", attrs={"class":"content-entry entry-photo rich-content"});
+            foundContent = soup.find(name="div", attrs={"class":re.compile("(content-entry entry-\w+ )?rich-content")});
+
+        if(not foundContent):
+            #<div class="entry-content clearfix j_text">
+            foundContent = soup.find(name="div", attrs={"class":"entry-content clearfix j_text"});
+
+        if(not foundContent):
+            #http://remixmusic.diandian.com/post/2013-05-13/40051897352
+            # <article class="hentry link">
+            # ...
+                # <div class="entry-content">
+                   
+                   
+                # </div>
+            foundContent = soup.find(name="div", attrs={"class":"entry-content"});
+
+        logging.debug("foundContent=%s", foundContent);
         if(foundContent):
             #post photo
             foundContent = crifanLib.removeSoupContentsTagAttr(foundContent, "h2", "class", "title"); # remove <h2 class="title">
@@ -904,7 +1022,19 @@ def extractTags(url, html) :
                         logging.debug("tagAUni=%s", tagAUni);
                         tagList.append(tagAUni);
                     foundTag = True;
+        
         if(not foundTag):
+            #http://googleyixia.com/node/727
+            # <dl class="tags">
+                # <dt><span class="post-type icon-tags">标签</span></dt>
+                
+                # <dd><a href="/?tag=%E7%AB%99%E7%82%B9%E6%97%A5%E5%BF%97" target="_blank">站点日志</a></dd>
+                
+                # <dd><a href="/?tag=%E6%88%90%E7%AB%8B" target="_blank">成立</a></dd>
+                
+                # <dd><a href="/?tag=Google%E4%B8%80%E4%B8%8B" target="_blank">Google一下</a></dd>
+                
+            # </dl>
             foundDlClassTags = soup.find(name="dl", attrs={"class":"tags"});
             logging.debug("foundDlClassTags=%s", foundDlClassTags);
             if(foundDlClassTags):

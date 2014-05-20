@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v17.7
+版本：     v18.2
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -30,6 +30,21 @@ http://www.crifan.com/bbs/categories/blogstowordpress
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v18.2]
+[BlogSina.py]
+1.fixbug -> support blog author reply comments
+
+[v18.1]
+[BlogDiandian.py]
+1. fix post content and next perma link for http://remixmusic.diandian.com
+2. fix title for post title:
+BlogsToWordpress.py -f http://remixmusic.diandian.com/?p=669 -l 1
+BlogsToWordpress.py -f http://remixmusic.diandian.com/?p=316 -l 1
+BlogsToWordpress.py -f http://remixmusic.diandian.com/?p=18117 -l 1
+BlogsToWordpress.py -f http://remixmusic.diandian.com/post/2013-05-13/40051897352 -l 1
+3. fix post content for:
+BlogsToWordpress.py -f http://remixmusic.diandian.com/post/2013-05-13/40051897352 -l 1
+
 [v17.7]
 1. add note when not designate -s or -f
 [BlogNetease.py]
@@ -47,8 +62,10 @@ comment url:
 http://blog.sina.com.cn/s/comment_4701280b0101854o_1.html
 [BlogDiandian.py]
 5. fix bug now support http://googleyixia.com/ to find first perma link, next perma link, extract title, tags
+
 [v17.2]
 1. [BlogNetease] update to fix bug: can not find first permanent link
+
 [v17.1]
 1.fix error for extract post title  and nex link for:
 http://78391997.qzone.qq.com/
@@ -168,7 +185,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v17.7";
+__VERSION__ = "v18.2";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
@@ -939,6 +956,7 @@ def fetchSinglePost(url):
 
     # extrat next (previously published) blog item link
     # here must extract next link first, for next call to use while omit=True
+    #logging.info("Begin to call findNextPermaLink");
     infoDict['nextLink'] = findNextPermaLink(url, respHtml);
     logging.debug("infoDict['nextLink']=%s", infoDict['nextLink']);
     logging.debug("Extracted post's next permanent link: %s", infoDict['nextLink']);
@@ -1017,7 +1035,7 @@ def fetchSinglePost(url):
             crifanLib.calcTimeStart("process_comment");
             try :
                 infoDict['comments'] = fetchAndParseComments(url, respHtml);
-                
+                #logging.info("infoDict['comments']=%s", infoDict['comments']);
                 commentLen = len(infoDict['comments']);
                 if(commentLen > 0) :
                     logging.info("    Extracted comments: %4d", commentLen);
