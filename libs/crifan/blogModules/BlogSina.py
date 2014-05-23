@@ -7,6 +7,10 @@ For BlogsToWordpress, this file contains the functions for Sina Blog.
 [TODO]
 
 【版本历史】
+[v1.7]
+1.fixbug -> support sub comments for some post:
+http://blog.sina.com.cn/s/blog_89445d4f0101jgen.html
+
 [v1.6]
 1.fixbug -> support blog author reply comments
 
@@ -37,6 +41,7 @@ from BeautifulSoup import BeautifulSoup,Tag,CData;
 import logging;
 import crifanLib;
 import cookielib;
+import json;
 #from xml.sax import saxutils;
 
 #--------------------------------const values-----------------------------------
@@ -527,10 +532,6 @@ def parseSingleCmtSoup(singleCmtSoup, curCmtId, parentCmdId):
 
         #logging.debug("mainOrSubCmtBodySoup=%s", mainOrSubCmtBodySoup);
         
-        # mappedContents = map(CData, mainOrSubCmtBodySoup.contents);
-        # logging.info("mappedContents=%s", mappedContents);
-        # cmtContent = ''.join(mappedContents);
-        
         cmtContent = crifanLib.soupContentsToUnicode(mainOrSubCmtBodySoup.contents);
         #logging.info("cmtContent=%s", cmtContent);
         
@@ -575,44 +576,340 @@ def parseSingleCmtSoup(singleCmtSoup, curCmtId, parentCmdId):
 
 #------------------------------------------------------------------------------
 # parse comment 'data' field string to comment dict info
-def parseCmtDataStr(dataStr, startNum):
-    cmtDictList = [];
+# def parseCmtDataStr(dataStr, startNum):
+    # cmtDictList = [];
     
-    #logging.debug("data str in cmt json: \n%s", dataStr);
-    parsedHtml = parseHtml(dataStr);
-    fakeHtml = genFakeHtml(parsedHtml);
-    soup = BeautifulSoup(fakeHtml);
+    # #logging.debug("data str in cmt json: \n%s", dataStr);
+    # parsedHtml = parseHtml(dataStr);
+    # fakeHtml = genFakeHtml(parsedHtml);
+    # soup = BeautifulSoup(fakeHtml);
     
-    mainCmtList = soup.findAll(attrs={"class":"SG_revert_Cont"});
+    # mainCmtList = soup.findAll(attrs={"class":"SG_revert_Cont"});
     
-    lastCmtId = startNum + 1;
-    logging.debug("lastCmtId=%s", lastCmtId);
+    # lastCmtId = startNum + 1;
+    # logging.debug("lastCmtId=%s", lastCmtId);
     
-    for (mainCmtIdx, singleCmtSoup) in enumerate(mainCmtList) :
-        curMainCmtId = lastCmtId;
-        #process main comment
-        mainDestCmtDict = parseSingleCmtSoup(singleCmtSoup, lastCmtId, 0);
-        logging.debug("lastCmtId=%s", lastCmtId);
-        cmtDictList.append(mainDestCmtDict);
+    # for (mainCmtIdx, singleCmtSoup) in enumerate(mainCmtList) :
+        # curMainCmtId = lastCmtId;
+        # #process main comment
+        # mainDestCmtDict = parseSingleCmtSoup(singleCmtSoup, lastCmtId, 0);
+        # logging.debug("lastCmtId=%s", lastCmtId);
+        # cmtDictList.append(mainDestCmtDict);
         
-        #check exist sub comment or not, if exist, process them
-        #<div class="SG_revert_Re SG_j_linedot1" id="reply_2547560" style="display:">
-        subCmtSoupList = singleCmtSoup.findAll(name="div", attrs={"class":"SG_revert_Re SG_j_linedot1", "id":re.compile("reply_\d+")});
-        logging.debug("subCmtSoupList=%s", subCmtSoupList);
-        if(subCmtSoupList):
-            for singleSubCmtSoup in subCmtSoupList:
-                logging.debug("singleSubCmtSoup=%s", singleSubCmtSoup);
+        # #check exist sub comment or not, if exist, process them
+        # #<div class="SG_revert_Re SG_j_linedot1" id="reply_2547560" style="display:">
+        # subCmtSoupList = singleCmtSoup.findAll(name="div", attrs={"class":"SG_revert_Re SG_j_linedot1", "id":re.compile("reply_\d+")});
+        # logging.debug("subCmtSoupList=%s", subCmtSoupList);
+        # if(subCmtSoupList):
+            # for singleSubCmtSoup in subCmtSoupList:
+                # logging.info("singleSubCmtSoup=%s", singleSubCmtSoup);
+                # #++lastCmtId;
+                # lastCmtId = lastCmtId + 1;
+                # logging.info("after lastCmtId+1 in sub comment for loop, lastCmtId=%s", lastCmtId);
+                # singleSubDestCmtDict = parseSingleCmtSoup(singleSubCmtSoup, lastCmtId, curMainCmtId);
+                # cmtDictList.append(singleSubDestCmtDict);
+        
+        # #++lastCmtId;
+        # lastCmtId = lastCmtId + 1;
+        # #logging.info("after lastCmtId+1 in main comment for loop, lastCmtId=%s", lastCmtId);
+
+    # return cmtDictList;
+
+# parse data json string into comment dict list
+def parseCmtDataStr(postIdStr, dataStr, startNum):
+    cmtDictList = [];
+	# "data" : {
+		# "spam_comment_check" : "bf3678dd0bde3aa355baa8c52cf71e71",
+		# "is_comment_close" : "0",
+		# "comment_num" : "13",
+		# "comment_total_num" : "13",
+		# "comment_data" : [{ ...}, {...}, ...]
+    dataDict = {};
+    try:
+        #logging.info("dataStr=%s", dataStr);
+        dataDict = json.loads(dataStr);
+        #dataDict = json.loads(dataStr, "UTF-8");
+        #dataDict = json.loads(dataStr, "GBK");
+        #logging.info("dataDict=%s", dataDict);
+        if("comment_data" in dataDict):
+            commentDataDictList = dataDict['comment_data'];
+                #logging.info("commentDataDictList=%s", commentDataDictList);
+            lastCmtId = startNum + 1;
+            logging.debug("lastCmtId=%s", lastCmtId);
+            for singleMainCmtDataDict in commentDataDictList:
+                curMainCmtId = lastCmtId;
+                logging.debug("curMainCmtId=%s", curMainCmtId);
+                #process main comment
+                (mainDestCmtDict, subCmtNum) = parseMainOrSubCmtDict(singleMainCmtDataDict, curMainCmtId, 0);
+                logging.debug("mainDestCmtDict=%s, subCmtNum=%d", mainDestCmtDict, subCmtNum);
+                cmtDictList.append(mainDestCmtDict);
+                if(subCmtNum > 0):
+                    commentIdStr = singleMainCmtDataDict['id'];
+                    logging.debug("commentIdStr=%s", commentIdStr);
+                    #has sub comments, need process it
+                    (gotValidSubCmtJson, subCmtJsonOrErrMsg) = getSubCmtJson(postIdStr, commentIdStr);
+                    logging.debug("gotValidSubCmtJson=%s, subCmtJsonOrErrMsg=%s", gotValidSubCmtJson, subCmtJsonOrErrMsg);
+                    subDataDict = json.loads(subCmtJsonOrErrMsg);
+                    #logging.info("subDataDict=%s", subDataDict);
+                    cmtReDataDictList = subDataDict['comment_reply_data'];
+                    #logging.debug("cmtReDataDictList=%s", cmtReDataDictList);
+                    for singleSubCmtDict in cmtReDataDictList:
+                        logging.debug("singleSubCmtDict=%s", singleSubCmtDict);
+                        #++lastCmtId;
+                        lastCmtId = lastCmtId + 1;
+                        logging.debug("after lastCmtId+1 in sub comment for loop, lastCmtId=%s", lastCmtId);
+                        (subCmtDestDict, unuseSubCmtNum) = parseMainOrSubCmtDict(singleSubCmtDict, lastCmtId, curMainCmtId);
+                        cmtDictList.append(subCmtDestDict);
                 #++lastCmtId;
                 lastCmtId = lastCmtId + 1;
-                #logging.info("after lastCmtId+1 in sub comment for loop, lastCmtId=%s", lastCmtId);
-                singleSubDestCmtDict = parseSingleCmtSoup(singleSubCmtSoup, lastCmtId, curMainCmtId);
-                cmtDictList.append(singleSubDestCmtDict);
-        
-        #++lastCmtId;
-        lastCmtId = lastCmtId + 1;
-        #logging.info("after lastCmtId+1 in main comment for loop, lastCmtId=%s", lastCmtId);
+                logging.debug("after lastCmtId+1 in main comment for loop, lastCmtId=%s", lastCmtId);
+        else:
+            #{"spam_comment_check":"081ad68bf5025dc826e2102581e0d060","is_comment_close":"0","comment_num":"0","comment_total_num":"0"}
+            logging.debug("Can not found comment_data in data json string=%s", dataStr);
+    except:
+        logging.warning("Fail for parse resp comment data json string=%s", dataStr);
 
     return cmtDictList;
+
+#get sub comment
+def getSubCmtJson(articleIdStr, commentIdStr):
+    (gotValidSubCmtJson, subCmtJsonOrErrMsg) = (False, "");
+
+    #http://control.blog.sina.com.cn/admin/comment_new/cms_usereply_list.php?domain=2
+    getSubCmtUrl = "http://control.blog.sina.com.cn/admin/comment_new/cms_usereply_list.php?domain=2";
+    # article_id=89445d4f0101jgen&
+    # comment_id=3015921&
+    # page=1
+    postDict = {
+        'article_id': articleIdStr,
+        'comment_id': commentIdStr,
+        'page'      : "1",
+        
+    };
+    subCmtRespHtml = crifanLib.getUrlRespHtml(getSubCmtUrl, postDict);
+    logging.debug("subCmtRespHtml=%s", subCmtRespHtml);
+
+    foundTextarea = re.search("<textarea>(?P<respCodeA00006Str>.+)</textarea>$", subCmtRespHtml);
+    logging.debug("foundTextarea=%s", foundTextarea);
+    if(foundTextarea):
+        respCodeA00006Str = foundTextarea.group('respCodeA00006Str');
+
+        # extract returned data field
+        (gotValidSubCmtJson, subCmtJsonOrErrMsg) = extractCmtDataJsonStr(respCodeA00006Str);
+        logging.debug("gotValidSubCmtJson=%s, subCmtJsonOrErrMsg=%s", gotValidSubCmtJson, subCmtJsonOrErrMsg);
+    else:
+        logging.debug("Fail to got valid sub comments resp html from getSubCmtUrl=%s", getSubCmtUrl);
+        (gotValidSubCmtJson, subCmtJsonOrErrMsg) = (False, "Fail to extract out respCodeA00006Str");
+
+    return (gotValidSubCmtJson, subCmtJsonOrErrMsg);
+
+#parse single main or sub comment dict into dest comment dict
+def parseMainOrSubCmtDict(mainOrSubCmtDataDict, curCmtId, parentCmdId):
+    logging.debug("in parseMainOrSubCmtDict: curCmtId=%d, parentCmdId=%d", curCmtId, parentCmdId);
+    logging.debug("mainOrSubCmtDataDict=%s", mainOrSubCmtDataDict);
+
+    #(1) Main Comment
+    # [{
+		# "id" : "3015628",
+		# "stair_cms_id" : null,
+		# "is_first" : true,
+		# "comm_uid" : "2445561093",
+		# "cms_uid_vinfo" : false,
+		# "src_uid" : "2302958927",
+		# "cms_reply_num" : "0",
+		# "cms_type" : "1",
+		# "cms_n" : 1,
+		# "fromProduct" : "blog",
+		# "uname" : "\u843d\u5c0f\u5b89",
+		# "ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/2445561093",
+		# "vimg" : null,
+		# "user_image" : "http:\/\/portrait6.sinaimg.cn\/2445561093\/blog\/50",
+		# "ulink" : "http:\/\/blog.sina.com.cn\/u\/2445561093",
+		# "cms_body" : "%E9%98%BF%E6%9D%B0%E5%A7%90%E5%A6%B9%E7%BB%A7%E7%BB%AD%E6%B3%AA%E6%B5%81%E6%BB%A1%E9%9D%A2%E2%80%A6%E2%80%A6%28%2A%5E__%5E%2A%29%26nbsp%3B%E8%BF%99%E7%A7%8D%E8%A1%A8%E8%BE%BE%E5%A5%BD%E5%96%9C%E5%89%A7%E5%93%A6%EF%BC%81%E4%BA%8C%E5%85%AC%E4%B8%BB%E5%A4%A7%E4%BA%BA%E6%88%90%E7%BB%A9%E4%B8%8D%E9%94%99%E5%93%A6%EF%BC%81%E4%B9%88%E4%B9%88%E5%93%92%3Cimg%20src%3D%22http%3A%2F%2Fwww.sinaimg.cn%2Fuc%2Fmyshow%2Fblog%2Fmisc%2Fgif%2FE___0088EN00SIGT.gif%22%20style%3D%22margin%3A1px%3Bcursor%3Apointer%3B%22%20onclick%3D%22window.open%28%27http%3A%2F%2Fblog.sina.com.cn%2Fmyshow2010%27%29%22%20border%3D%220%22%20title%3D%22%E9%A1%B6%22%20%2F%3E",
+		# "cms_circle_info" : "",
+		# "cms_pubdate" : "2014-03-21 13:02:15"
+	# }, {
+		# "id" : "3015631",
+		# "stair_cms_id" : null,
+		# "is_first" : false,
+		# "comm_uid" : "1991520912",
+		# "cms_uid_vinfo" : false,
+		# "src_uid" : "2302958927",
+		# "cms_reply_num" : "0",
+		# "cms_type" : "1",
+		# "cms_n" : 2,
+		# "fromProduct" : "blog",
+		# "uname" : "Nightscreamer",
+		# "ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/1991520912",
+		# "vimg" : null,
+		# "user_image" : "http:\/\/portrait1.sinaimg.cn\/1991520912\/blog\/50",
+		# "ulink" : "http:\/\/blog.sina.com.cn\/u\/1991520912",
+		# "cms_body" : "%E5%BE%88%E8%8D%A3%E5%B9%B8%E8%83%BD%E5%8F%82%E5%8A%A0%E8%BF%99%E6%A0%B7%E7%9A%84%E7%BB%9F%E8%AE%A1%E3%80%82%E8%BF%99%E5%85%85%E5%88%86%E8%AF%81%E6%98%8E%E4%BA%86brony%E4%B9%9F%E9%83%BD%E6%98%AF%E6%AD%A3%E5%B8%B8%E4%BA%BA%E3%80%82",
+		# "cms_circle_info" : "",
+		# "cms_pubdate" : "2014-03-21 13:07:02"
+	# }, {
+		# "id" : "3015921",
+		# "stair_cms_id" : null,
+		# "is_first" : false,
+		# "comm_uid" : "2895573181",
+		# "cms_uid_vinfo" : false,
+		# "src_uid" : "2302958927",
+		# "cms_reply_num" : "2",
+		# "cms_type" : "1",
+		# "cms_n" : 3,
+		# "fromProduct" : "blog",
+		# "uname" : "Lulamoon",
+		# "ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/2895573181",
+		# "vimg" : null,
+		# "user_image" : "http:\/\/portrait6.sinaimg.cn\/2895573181\/blog\/50",
+		# "ulink" : "http:\/\/blog.sina.com.cn\/u\/2895573181",
+		# "cms_body" : "%E5%8E%9F%E6%9D%A5%E9%82%AA%E8%8C%A7%E8%B7%9FTrixie%E7%9A%84%E4%BA%BA%E6%B0%94%E6%B2%A1%E5%A4%9A%E9%AB%98%E4%B9%88%E2%80%A6%E2%80%A6",
+		# "cms_circle_info" : "",
+		# "cms_pubdate" : "2014-03-21 18:26:45"
+	# },
+    
+    #(2) Sub Comment
+    # [{
+        # "id" : "3017611",
+        # "stair_cms_id" : "3015921",
+        # "reply_cms_id" : "3015921",
+        # "comm_uid" : "1591612940",
+        # "src_uid" : "2302958927",
+        # "source_uid" : "2895573181",
+        # "cms_uid_vinfo" : false,
+        # "cms_type" : "2",
+        # "cms_pubdate" : "2014-03-24 12:13:40",
+        # "cms_n" : 1,
+        # "fromProduct" : "blog",
+        # "uname" : "\u674e\u5c0f\u9f99",
+        # "ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/1591612940",
+        # "vimg" : null,
+        # "user_image" : "http:\/\/portrait5.sinaimg.cn\/1591612940\/blog\/30",
+        # "uhost" : "",
+        # "ulink" : "http:\/\/blog.sina.com.cn\/u\/1591612940",
+        # "source_uname" : "Lulamoon",
+        # "source_ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/2895573181",
+        # "source_vimg" : null,
+        # "cms_body" : "%E5%A6%82%E6%9E%9C%E8%83%BD%E6%94%BE%E5%87%BA%E5%89%8D10%E5%90%8D%E4%BB%A5%E5%A4%96%E7%9A%84%E8%A7%92%E8%89%B2%E4%BA%BA%E6%B0%94%E6%8E%92%E5%90%8D%E7%9A%84%E8%AF%9D%E4%B8%8D%E7%9F%A5%E9%81%93%E5%A5%B9%E4%BB%AC%E4%BC%9A%E5%9C%A8%E5%A4%9A%E5%B0%91%E4%BD%8D%E5%91%A2%E2%80%A6%E2%80%A6",
+        # "cms_circle_info" : ""
+    # }, {
+        # "id" : "3016043",
+        # "stair_cms_id" : "3015921",
+        # "reply_cms_id" : "3015921",
+        # "comm_uid" : "2302958927",
+        # "src_uid" : "2302958927",
+        # "source_uid" : "2895573181",
+        # "cms_uid_vinfo" : false,
+        # "cms_type" : "2",
+        # "cms_pubdate" : "2014-03-21 21:53:05",
+        # "cms_n" : 2,
+        # "fromProduct" : "blog",
+        # "uname" : "EquestriaCN",
+        # "ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/2302958927",
+        # "vimg" : null,
+        # "user_image" : "http:\/\/portrait8.sinaimg.cn\/2302958927\/blog\/30",
+        # "uhost" : "equestriacn",
+        # "ulink" : "http:\/\/blog.sina.com.cn\/u\/2302958927",
+        # "source_uname" : "Lulamoon",
+        # "source_ria_index_url" : "http:\/\/blog.sina.com.cn\/u\/2895573181",
+        # "source_vimg" : null,
+        # "cms_body" : "%E4%BD%9C%E4%B8%BA%E5%8D%95%E9%A1%B9%E9%80%89%E6%8B%A9%EF%BC%8C%E9%99%A4%E4%BA%86%E9%9C%B2%E5%A8%9C%E5%85%B6%E4%BB%96%E9%B2%9C%E6%9C%89%E8%A7%92%E8%89%B2%E8%83%BD%E8%B7%9F%E5%85%AD%E4%B8%BB%E8%A7%92%E6%AF%94%E3%80%82%E5%A4%9A%E9%80%89%E7%9A%84%E8%AF%9D%E4%B9%9F%E8%AE%B8%E6%83%85%E5%86%B5%E4%BC%9A%E4%B8%8D%E4%B8%80%E6%A0%B7%E3%80%82",
+        # "cms_circle_info" : ""
+    # }
+    
+    #special comments
+    #http://blog.sina.com.cn/s/blog_89445d4f0100vqa5.html
+    # {
+        # "id" : "1987844",
+        # "stair_cms_id" : null,
+        # "is_first" : false,
+        # "comm_uid" : "0",
+        # "cms_uid_vinfo" : false,
+        # "src_uid" : "2302958927",
+        # "cms_reply_num" : "0",
+        # "cms_type" : "1",
+        # "cms_n" : 2,
+        # "fromProduct" : "blog",
+        # "uname" : "\u65b0\u6d6a\u7f51\u53cb",
+        # "user_image" : "http:\/\/blogimg.sinajs.cn\/v5images\/default.gif",
+        # "cms_body" : "%E5%8D%9A%E4%B8%BB%E6%9C%80%E5%96%9C%E6%AC%A2%E9%82%A3%E5%8C%B9%E5%B0%8F%E9%A9%AC%E5%91%A2%EF%BC%9F",
+        # "cms_circle_info" : "",
+        # "cms_pubdate" : "2011-09-02 21:10:29"
+    # },
+
+    
+    (destCmtDict, subCmtNum) = ({}, 0);
+    
+    try:
+        destCmtDict['id'] = curCmtId;
+        logging.debug("--- comment[%d] ---", destCmtDict['id']);
+
+        unameStrUni = mainOrSubCmtDataDict['uname'];
+        #logging.info("unameStrUni=%s", unameStrUni);
+        #decodedUnameUni = unameStr.decode('unicode-escape');
+        #logging.info("decodedUnameUni=%s", decodedUnameUni);
+        #destCmtDict['author'] = decodedUnameUni;
+        destCmtDict['author'] = unameStrUni;
+
+        if("ulink" in mainOrSubCmtDataDict):
+            destCmtDict['author_url'] = mainOrSubCmtDataDict['ulink'];
+        else:
+            destCmtDict['author_url'] = "";
+        #logging.info("destCmtDict['author_url']=%s", destCmtDict['author_url']);
+
+        datetimeStr = mainOrSubCmtDataDict['cms_pubdate'];
+        logging.debug("datetimeStr=%s", datetimeStr);
+        parsedLocalTime = datetime.strptime(datetimeStr, '%Y-%m-%d %H:%M:%S'); #2012-03-29 09:52:17
+        gmtTime = crifanLib.convertLocalToGmt(parsedLocalTime);
+        destCmtDict['date'] = parsedLocalTime.strftime("%Y-%m-%d %H:%M:%S");
+        destCmtDict['date_gmt'] = gmtTime.strftime("%Y-%m-%d %H:%M:%S");
+
+        cmsBodyUni = mainOrSubCmtDataDict['cms_body'];
+        #logging.info("cmsBodyUni=%s", cmsBodyUni);
+        #curType = type(cmsBodyUni);
+        #logging.info("curType=%s", curType);
+        cmdBodyStr = str(cmsBodyUni);
+        #logging.info("cmdBodyStr=%s", cmdBodyStr);
+        #curType = type(cmdBodyStr);
+        #logging.info("curType=%s", curType);
+        urlunquotedCmsBodyStr = urllib.unquote(cmdBodyStr);
+        #logging.info("urlunquotedCmsBodyStr=%s", urlunquotedCmsBodyStr);
+        #curType = type(urlunquotedCmsBodyStr);
+        #logging.info("curType=%s", curType);
+        urlunquotedCmsBodyUni = urlunquotedCmsBodyStr.decode("UTF-8");
+        #curType = type(urlunquotedCmsBodyUni);
+        #logging.info("curType=%s", curType);
+        #logging.info("urlunquotedCmsBodyUni=%s", urlunquotedCmsBodyUni);
+
+        destCmtDict['content'] = urlunquotedCmsBodyUni;
+
+        destCmtDict['author_email'] = "";
+        destCmtDict['author_IP'] = "";
+        #destCmtDict['approved'] = 1;
+        #destCmtDict['type'] = '';
+        #destCmtDict['parent'] = 0;
+        destCmtDict['parent'] = int(parentCmdId);
+        #destCmtDict['user_id'] = 0;
+
+        logging.debug("author=%s", destCmtDict['author']);
+        logging.debug("author_url=%s", destCmtDict['author_url']);
+        logging.debug("date=%s", destCmtDict['date']);
+        logging.debug("date_gmt=%s", destCmtDict['date_gmt']);
+        logging.debug("content=%s", destCmtDict['content']);
+        logging.debug("parent=%d", destCmtDict['parent']);
+
+        # for main comment
+        if("cms_reply_num" in mainOrSubCmtDataDict):
+            subCmtNum = mainOrSubCmtDataDict['cms_reply_num'];
+            logging.debug("subCmtNum=%s", subCmtNum);
+            subCmtNum = int(subCmtNum);
+
+        #print "single comment parse OK: %d"%(curCmtId);
+    except:
+        logging.warning("Error while parse single main or sub comment dict=%s", mainOrSubCmtDataDict);
+
+    return (destCmtDict, subCmtNum);
+
 
 #------------------------------------------------------------------------------
 # extract post ID
@@ -626,6 +923,36 @@ def extractPostId(sinaPostUrl):
         postId = foundPostId.group("postId");
     return postId;
 
+# extract comment data json string
+def extractCmtDataJsonStr(respCodeA00006Str):
+    (gotValidDataJsonStr, cmtDataJsonOrFailMsg) = (False, "Unknown error");
+    #foundCodeA00006 = re.search('{"code":"A00006",data:"(?P<dataJsonStr>.+)"}$', respJson);
+    #foundCodeA00006 = re.search('{"code":"A00006","?data"?:"(?P<dataJsonStr>.+)"}$', respJson);
+    foundCodeA00006 = re.search('{"code":"A00006","?data"?:(?P<dataJsonStr>\{.+\})}$', respCodeA00006Str);
+    logging.debug("foundCodeA00006=%s", foundCodeA00006);
+
+    if (foundCodeA00006) :
+        dataJsonStr = foundCodeA00006.group("dataJsonStr");
+        logging.debug("dataJsonStr=%s", dataJsonStr);
+
+        # 1. no comments:
+        #{"code":"A00006",data:"\u535a\u4e3b\u5df2\u5173\u95ed\u8bc4\u8bba"}
+        if(dataJsonStr == "\\u535a\\u4e3b\\u5df2\\u5173\\u95ed\\u8bc4\\u8bba") :
+            # 博主已关闭评论
+            decodedDataStr = dataJsonStr.decode("unicode-escape");
+            (gotValidDataJsonStr, cmtDataJsonOrFailMsg) = (False, decodedDataStr);
+        elif (dataJsonStr.find('class=\\"noCommdate\\"') > 0) :
+            # 2. no more comment
+            #{"code":"A00006",data:"<li><div class=\"noCommdate\">........
+            (gotValidDataJsonStr, cmtDataJsonOrFailMsg) = (False, "No more comments");
+        else :
+            # contain valid comment
+            (gotValidDataJsonStr, cmtDataJsonOrFailMsg) = (True, dataJsonStr);
+    else:
+        logging.debug("Fail extract comment data json string from=%s", respCodeA00006Str);
+    
+    return (gotValidDataJsonStr, cmtDataJsonOrFailMsg);
+    
 #------------------------------------------------------------------------------
 # get valid data field/string in returned in json string for comment url
 def getCmtJson(cmtUrl):
@@ -653,33 +980,13 @@ def getCmtJson(cmtUrl):
     if(respJson) :
         #logging.debug("Comment url ret json: \n%s", respJson);
         # extract returned data field
-        #foundData = re.search('{"code":"A00006",data:"(?P<dataStr>.+)"}$', respJson);
-        foundData = re.search('{"code":"A00006","?data"?:"(?P<dataStr>.+)"}$', respJson);
-        logging.debug("foundData=%s", foundData);
+        (gotValidDataJsonStr, cmtDataJsonOrFailMsg) = extractCmtDataJsonStr(respJson);
 
-        if (foundData) :
-            dataStr = foundData.group("dataStr");
-            logging.debug("dataStr=%s", dataStr);
-
-            # 1. no comments:
-            #{"code":"A00006",data:"\u535a\u4e3b\u5df2\u5173\u95ed\u8bc4\u8bba"}
-            if(dataStr == "\\u535a\\u4e3b\\u5df2\\u5173\\u95ed\\u8bc4\\u8bba") :
-                # 博主已关闭评论
-                (gotOk, cmtDataJsonStr) = (False, "");
-                decodedDataStr = dataStr.decode("unicode-escape");
-                logging.debug("comment url %s return %s", cmtUrl, decodedDataStr);
-            elif (dataStr.find('class=\\"noCommdate\\"') > 0) :
-                # 2. no more comment
-                #{"code":"A00006",data:"<li><div class=\"noCommdate\">........
-                (gotOk, cmtDataJsonStr) = (False, "");
-                logging.debug("comment url %s return no more comments", cmtUrl);
-            else :
-                # contain valid comment
-                gotOk = True;
-                cmtDataJsonStr = dataStr;
-                logging.debug("Got valid comment code json string");
+        if (gotValidDataJsonStr) :
+            logging.debug("Got valid comment code json string for cmtUrl=%s", cmtUrl);
+            (gotOk, cmtDataJsonStr) = (gotValidDataJsonStr, cmtDataJsonOrFailMsg);
         else:
-            logging.debug("Found returned invalid comment code json string=%s", respJson);
+            logging.debug("Fail to get valid comment code json string for cmtUrl=%s, error message=%s", cmtUrl, cmtDataJsonOrFailMsg);
 
     return (gotOk, cmtDataJsonStr);
 
@@ -703,25 +1010,31 @@ def fetchAndParseComments(url, html):
             # http://blog.sina.com.cn/s/blog_56c89b680102dynu.html
             # generate the comment url:
             #http://blog.sina.com.cn/s/comment_56c89b680102dynu_1.html
-            cmtUrl = "http://blog.sina.com.cn/s/comment_" + postId + "_" + str(cmtPageNum) + ".html";
-            #print "cmtUrl=",cmtUrl;
-            (gotOK, cmtDataJsonStr) = getCmtJson(cmtUrl);
+            #getCommentUrl = "http://blog.sina.com.cn/s/comment_" + postId + "_" + str(cmtPageNum) + ".html";
+            #http://blog.sina.com.cn/s/comment_89445d4f0101jgen_1.html?comment_v=articlenew
+            getCommentUrl = "http://blog.sina.com.cn/s/comment_" + postId + "_" + str(cmtPageNum) + ".html?comment_v=articlenew";
+            logging.debug("getCommentUrl=%s", getCommentUrl);
+            (gotOK, cmtDataJsonStr) = getCmtJson(getCommentUrl);
             if(gotOK) :
                 cmtIdStartNum = len(parsedCommentsList);
-                cmdDictList = parseCmtDataStr(cmtDataJsonStr, cmtIdStartNum);
-                for eachCmtDict in cmdDictList :
-                    parsedCommentsList.append(eachCmtDict);
-                    
-                    # report processed comments if exceed certain number
-                    parsedCmtLen = len(parsedCommentsList);
-                    curRepTime = parsedCmtLen/maxNumReportOnce;
-                    if(curRepTime != lastRepTime) :
-                        # report
-                        logging.info("    Has processed comments: %5d", parsedCmtLen);
-                        # update
-                        lastRepTime = curRepTime;
+                cmdDictList = parseCmtDataStr(postId, cmtDataJsonStr, cmtIdStartNum);
+                if(cmdDictList):
+                    for eachCmtDict in cmdDictList :
+                        parsedCommentsList.append(eachCmtDict);
+                        
+                        # report processed comments if exceed certain number
+                        parsedCmtLen = len(parsedCommentsList);
+                        curRepTime = parsedCmtLen/maxNumReportOnce;
+                        if(curRepTime != lastRepTime) :
+                            # report
+                            logging.info("    Has processed comments: %5d", parsedCmtLen);
+                            # update
+                            lastRepTime = curRepTime;
 
-                cmtPageNum += 1;
+                    cmtPageNum += 1;
+                else:
+                    needGetMore = False;
+                    logging.debug("Fail to parse out more comments from %s", cmtDataJsonStr);
             else :
                 needGetMore = False;
 

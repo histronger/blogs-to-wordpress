@@ -3,7 +3,7 @@
 """
 -------------------------------------------------------------------------------
 【版本信息】
-版本：     v18.2
+版本：     v18.3
 作者：     crifan
 联系方式： http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/
 
@@ -30,6 +30,11 @@ http://www.crifan.com/bbs/categories/blogstowordpress
 3.支持设置导出WXR帖子时的顺序：正序和倒序。
 
 【版本历史】
+[v18.3]
+[BlogSina.py]
+1.fixbug -> support sub comments for some post:
+http://blog.sina.com.cn/s/blog_89445d4f0101jgen.html
+
 [v18.2]
 [BlogSina.py]
 1.fixbug -> support blog author reply comments
@@ -185,7 +190,7 @@ import BlogDiandian;
 #Change Here If Add New Blog Provider Support
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v18.2";
+__VERSION__ = "v18.3";
 
 gConst = {
     'generator'         : "http://www.crifan.com/crifan_released_all/website/python/blogstowordpress/",
@@ -912,7 +917,7 @@ def fetchSinglePost(url):
         try :
             logging.debug("Begin to get url resp html for %s", url);
             respHtml = crifanLib.getUrlRespHtml(url);
-            logging.debug("Response html\n---------------\n%s", respHtml);
+            #logging.debug("Response html\n---------------\n%s", respHtml);
             gVal['statInfoDict']['fetchPageTime'] += crifanLib.calcTimeEnd("fetch_page");
             logging.debug("Successfully downloaded: %s", url);
             break # successfully, so break now

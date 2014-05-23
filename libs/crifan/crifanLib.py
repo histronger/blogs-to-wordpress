@@ -17,6 +17,12 @@ http://www.crifan.com/files/doc/docbook/python_summary/release/html/python_summa
 [TODO]
 
 [History]
+[v4.8, 2014-05-23]
+1.fixbug-> update translateString to work
+
+[v4.7, 2013-07-02]
+1. add initProxy, initProxyAndCookie
+
 [v4.5]
 1. add getUrlRespHtml_multiTry
 2. updated formatString
@@ -120,7 +126,7 @@ import cookielib;
 import htmlentitydefs;
 
 #--------------------------------const values-----------------------------------
-__VERSION__ = "v4.4";
+__VERSION__ = "v4.8";
 
 gConst = {
     'UserAgent' : 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.1; WOW64; Trident/5.0; SLCC2; .NET CLR 2.0.50727; .NET CLR 3.5.30729; .NET CLR 3.0.30729; Media Center PC 6.0; InfoPath.3; .NET4.0C; .NET4.0E)',
@@ -254,15 +260,18 @@ def convertLocalToGmt(localTime) :
     return localTime - timedelta(hours=8);
 
 def decodeHtmlEntity(origHtml, decodedEncoding=""):
-    """Decode html entity (name/decimal code point/hex code point) into unicode char (and then encode to decodedEncoding encoding char if decodedEncoding is not empty)
-    eg: from &copy; or &#169; or &#xa9; or &#xA9; to unicode '©', then encode to decodedEncoding if decodedEncoding is not empty
+    """Decode html entity (name/decimal code point/hex code point) into unicode char
+    eg: from &copy; or &#169; or &#xa9; or &#xA9; to unicode '©'
     
     Note:
-    Some special char can NOT show in some encoding, such as ©  can NOT show in GBK
+    1. Some special char can NOT show in some encoding, such as ©  can NOT show in GBK
 
     Related knowledge:
     http://www.htmlhelp.com/reference/html40/entities/latin1.html
     http://www.htmlhelp.com/reference/html40/entities/special.html
+    
+    2.  if processed, then processed string is already is unicode !!!
+        if not processed, then still is previous string
     """
     decodedHtml = "";
 
@@ -327,13 +336,14 @@ def decodeHtmlEntity(origHtml, decodedEncoding=""):
 
     #logging.info("origHtml=%s", origHtml);
     decodedHtml = decodedCodepointHex;
-    #logging.info("decodedHtml=%s", decodedHtml);
-    
+    #logging.info("decodedHtml=%s", decodedHtml); #type(decodedHtml)= <type 'unicode'>
+
+    #here mabye is unicode string
     if(decodedEncoding):
-        # note: here decodedHtml is unicode
-        decodedHtml = decodedHtml.encode(decodedEncoding, 'ignore');
-        #print "after encode into decodedEncoding=%s, decodedHtml=%s"%(decodedEncoding, decodedHtml);
-        
+        # note: here decodedhtml is unicode
+        decodedhtml = decodedhtml.encode(decodedEncoding, 'ignore');
+        #print "after encode into decodedEncoding=%s, decodedhtml=%s"%(decodedEncoding, decodedhtml);
+    
     return decodedHtml;
 
 #------------------------------------------------------------------------------
@@ -847,6 +857,54 @@ def initAutoHandleCookies(localCookieFileName=None):
     #print "Auto handle cookies inited OK";
     return;
 
+def initProxy(singleProxyDict = {}):
+    """Add proxy support for later urllib2 auto use this proxy
+    
+    Note:
+    1. tmp not support username and password
+    2. after this init, later urllib2.urlopen will automatically use this proxy
+    """
+
+    proxyHandler = urllib2.ProxyHandler(singleProxyDict);
+    #print "proxyHandler=",proxyHandler;
+    proxyOpener = urllib2.build_opener(proxyHandler);
+    #print "proxyOpener=",proxyOpener;
+    urllib2.install_opener(proxyOpener);
+    
+    return;
+    
+def initProxyAndCookie(singleProxyDict = {}, localCookieFileName=None):
+    """Init proxy and cookie
+    
+    Note:
+    1. after this init, later urllib2.urlopen will auto, use proxy, auto handle cookies
+    2. for proxy, tmp not support username and password
+    """
+
+    proxyHandler = urllib2.ProxyHandler(singleProxyDict);
+    #print "proxyHandler=",proxyHandler;
+    
+    if(localCookieFileName):
+        gVal['cookieUseFile'] = True;
+        #print "use cookie file";
+        
+        #gVal['cj'] = cookielib.FileCookieJar(localCookieFileName); #NotImplementedError
+        gVal['cj'] = cookielib.LWPCookieJar(localCookieFileName); # prefer use this
+        #gVal['cj'] = cookielib.MozillaCookieJar(localCookieFileName); # second consideration
+        #create cookie file
+        gVal['cj'].save();
+    else:
+        #print "not use cookie file";
+        gVal['cookieUseFile'] = False;
+        
+        gVal['cj'] = cookielib.CookieJar();
+
+    proxyAndCookieOpener = urllib2.build_opener(urllib2.HTTPCookieProcessor(gVal['cj']), proxyHandler);
+    #print "proxyAndCookieOpener=",proxyAndCookieOpener;
+    urllib2.install_opener(proxyAndCookieOpener);
+    
+    return;
+    
 #------------------------------------------------------------------------------
 def getCurrentCookies():
     """Return current cookies.
@@ -864,8 +922,6 @@ def printCurrentCookies():
         for index, cookie in enumerate(gVal['cj']):
             print "[%d] name=%s,value=%s,domain=%s,path=%s,secure=%s,expires=%s,version=%d"% \
                 (index, cookie.name, cookie.value, cookie.domain, cookie.path, cookie.secure, cookie.expires, cookie.version);
-    else:
-        print "no cookie for now";
 
 #------------------------------------------------------------------------------
 def checkAllCookiesExist(cookieNameList, cookieJar) :
@@ -1110,7 +1166,7 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False, po
     #update cookies into local file
     if(gVal['cookieUseFile']):
         gVal['cj'].save();
-        #logging.info("gVal['cj']=%s", gVal['cj']);
+        logging.info("gVal['cj']=%s", gVal['cj']);
     
     return resp;
 
@@ -1120,26 +1176,34 @@ def getUrlResponse(url, postDict={}, headerDict={}, timeout=0, useGzip=False, po
 def getUrlRespHtml(url, postDict={}, headerDict={}, timeout=0, useGzip=True, postDataDelimiter="&") :
     resp = getUrlResponse(url, postDict, headerDict, timeout, useGzip, postDataDelimiter);
     respHtml = resp.read();
-    if(useGzip) :
-        #print "---before unzip, len(respHtml)=",len(respHtml);
-        respInfo = resp.info();
-        
-        # Server: nginx/1.0.8
-        # Date: Sun, 08 Apr 2012 12:30:35 GMT
-        # Content-Type: text/html
-        # Transfer-Encoding: chunked
-        # Connection: close
-        # Vary: Accept-Encoding
-        # ...
-        # Content-Encoding: gzip
-        
-        # sometime, the request use gzip,deflate, but actually returned is un-gzip html
-        # -> response info not include above "Content-Encoding: gzip"
-        # eg: http://blog.sina.com.cn/s/comment_730793bf010144j7_3.html
-        # -> so here only decode when it is indeed is gziped data
-        if( ("Content-Encoding" in respInfo) and (respInfo['Content-Encoding'] == "gzip")) :
+    
+    #here, maybe, even if not send Accept-Encoding: gzip, deflate
+    #but still response gzip or deflate, so directly do undecompress
+    #if(useGzip) :
+    
+    #print "---before unzip, len(respHtml)=",len(respHtml);
+    respInfo = resp.info();
+    
+    # Server: nginx/1.0.8
+    # Date: Sun, 08 Apr 2012 12:30:35 GMT
+    # Content-Type: text/html
+    # Transfer-Encoding: chunked
+    # Connection: close
+    # Vary: Accept-Encoding
+    # ...
+    # Content-Encoding: gzip
+    
+    # sometime, the request use gzip,deflate, but actually returned is un-gzip html
+    # -> response info not include above "Content-Encoding: gzip"
+    # eg: http://blog.sina.com.cn/s/comment_730793bf010144j7_3.html
+    # -> so here only decode when it is indeed is gziped data
+    
+    #Content-Encoding: deflate
+    if("Content-Encoding" in respInfo):
+        if("gzip" == respInfo['Content-Encoding']):
             respHtml = zlib.decompress(respHtml, 16+zlib.MAX_WBITS);
-            #print "+++ after unzip, len(respHtml)=",len(respHtml);
+        elif("deflate" == respInfo['Content-Encoding']):
+            respHtml = zlib.decompress(respHtml, -zlib.MAX_WBITS);
 
     return respHtml;
 
@@ -1341,14 +1405,24 @@ def getStrPossibleCharset(inputStr) :
 def translateString(strToTranslate, fromLanguage="zh-CN", toLanguage="en"):
     transOK = False;
     translatedStr = strToTranslate;
+    #logging.info("translatedStr=%s", translatedStr);
     transErr = '';
 
     try :
         # following refer: http://python.u85.us/viewnews-335.html
-        postDict = {'hl':'zh-CN', 'ie':'UTF-8', 'text':strToTranslate, 'langpair':"%s|%s"%(fromLanguage, toLanguage)};
-        googleTranslateUrl = 'http://translate.google.cn/translate_t';
-        resp = getUrlRespHtml(googleTranslateUrl, postDict);
-        #logging.debug("---------------google translate resp html:\n%s", resp);
+        # postDict = {'hl':'zh-CN', 'ie':'UTF-8', 'text':strToTranslate, 'langpair':"%s|%s"%(fromLanguage, toLanguage)};
+        # googleTranslateUrl = 'http://translate.google.cn/translate_t';
+        # respHtml = getUrlRespHtml(googleTranslateUrl, postDict);
+        
+        #http://translate.google.cn/translate_a/t?client=t&sl=zh-CN&tl=en&hl=zh-CN&sc=2&ie=UTF-8&oe=UTF-8&oc=2&prev=conf&psl=en&ptl=en&otf=1&it=sel.5080&ssel=6&tsel=3&pc=1&q=%E6%88%91%E7%9A%84%E5%B0%8F%E9%A9%AC%E9%A9%B9%EF%BC%9A%E5%8F%8B%E8%B0%8A%E7%9A%84%E9%AD%94%E5%8A%9B%26amp%3Bnbsp%3B%E4%BB%8B%E7%BB%8D
+        #[[["My Little Pony : Friendship is Magic Introduction","我的小马驹：友谊的魔力\u0026amp;nbsp;介绍","","Wǒ de xiǎo mǎ jū: Yǒuyì de mólì\u0026amp;nbsp; jièshào"]],,"zh-CN",,[["My Little",[1],true,false,566,0,2,0],["Pony",[2],true,false,566,2,3,0],[": Friendship",[3],false,false,577,3,5,0],["is",[4],true,false,848,5,6,0],["Magic",[5],true,false,1000,6,7,0],["Introduction",[6],true,false,894,7,8,0]],[["我 的 小",1,[["My Little",566,true,false],["Of my little",0,true,false],["My Little One",0,true,false]],[[0,3]],"我的小马驹：友谊的魔力\u0026amp;nbsp;介绍"],["马驹",2,[["Pony",566,true,false],["foal",0,true,false],["Colts",0,true,false],["Colt",0,true,false],["foals",0,true,false]],[[3,5]],""],[": 友谊",3,[[": Friendship",577,false,false]],[[5,8]],""],["的",4,[["is",848,true,false],["of",0,true,false],["the",0,true,false],["of the",0,true,false]],[[8,9]],""],["魔力",5,[["Magic",1000,true,false],["the magic",0,true,false],["magic of",0,true,false],["the magic of",0,true,false],["magical",0,true,false]],[[9,11]],""],["介绍",6,[["Introduction",894,true,false],["presentation",8,true,false],["introduced",6,true,false],["introduce",1,true,false],["introduces",0,true,false]],[[11,23]],""]],,,[["zh-CN"]],64]
+        
+        quotedQueryStr = urllib.quote(translatedStr);
+        #logging.info("quotedQueryStr=%s", quotedQueryStr);
+        googleTranslateUrl = ("http://translate.google.cn/translate_a/t?client=t&sl=%s&tl=%s&q=%s")%(fromLanguage, toLanguage, quotedQueryStr);
+        #logging.info("googleTranslateUrl=%s", googleTranslateUrl);
+        respHtml = getUrlRespHtml(googleTranslateUrl);
+        #logging.info("---------------google translate respHtml html:\n%s", respHtml);
     except urllib2.URLError,reason :
         transOK = False;
         transErr = reason;
@@ -1356,19 +1430,32 @@ def translateString(strToTranslate, fromLanguage="zh-CN", toLanguage="en"):
         transOK = False;
         transErr = code;
     else :
-        soup = BeautifulSoup(resp);
-        resultBoxSpan = soup.find(id='result_box');
-        if resultBoxSpan and resultBoxSpan.span and resultBoxSpan.span.string :
+        #translatedJsonStr = respHtml;
+        #translatedDict = json.loads(translatedJsonStr);
+        #logging.info("translatedDict=%s", translatedDict);
+        
+        #[[["My Little Pony : Friendship is Magic Introduction","
+        foundFirstTranslatedStr = re.search('^\[\[\["(?P<firstTranslatedStr>.+?)","', respHtml);
+        #logging.info("foundFirstTranslatedStr=%s", foundFirstTranslatedStr);
+        if(foundFirstTranslatedStr):
+            firstTranslatedStr = foundFirstTranslatedStr.group('firstTranslatedStr');
+            #logging.info("firstTranslatedStr=%s", firstTranslatedStr);
+            translatedStr = firstTranslatedStr;
             transOK = True;
-            #translatedStr = resultBoxSpan.span.string.encode('utf-8');
-            googleRetTransStr = resultBoxSpan.span.string;
-            translatedStr = unicode(googleRetTransStr);
+
+        # soup = BeautifulSoup(respHtml);
+        # resultBoxSpan = soup.find(id='result_box');
+        # if resultBoxSpan and resultBoxSpan.span and resultBoxSpan.span.string :
+            # transOK = True;
+            # #translatedStr = resultBoxSpan.span.string.encode('utf-8');
+            # googleRetTransStr = resultBoxSpan.span.string;
+            # translatedStr = unicode(googleRetTransStr);
             
-            # just record some special one:
-            # from:
-            #【转载】[SEP4020  u-boot]  start.s  注释
-            # to:
-            # The 【reserved] [the SEP4020 u-boot] start.s comment
+            # # just record some special one:
+            # # from:
+            # #【转载】[SEP4020  u-boot]  start.s  注释
+            # # to:
+            # # The 【reserved] [the SEP4020 u-boot] start.s comment
         else :
             transOK = False;
             transErr = "can not extract translated string from returned result";
